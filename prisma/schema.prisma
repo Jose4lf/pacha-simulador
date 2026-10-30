@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===================== USUARIOS =====================
+
+model Usuario {
+  id           String   @id @default(cuid())
+  nombre       String   @unique
+  passwordHash String
+  rol          String // DECANO | PROFESOR | ALUMNO
+  createdAt    DateTime @default(now())
+
+  equiposComoAlumno  Equipo[]   @relation("AlumnoEquipos")
+  industriasProfesor Industria[]
+}
+
+// ===================== SIMULACION =====================
+
+model Industria {
+  id         String   @id @default(cuid())
+  nombre     String
+  anioActual Int      @default(0)
+  anioMaximo Int      @default(10)
+  estado     String   @default("ACTIVA") // ACTIVA | FINALIZADA
+  profesorId String
+  profesor   Usuario  @relation(fields: [profesorId], references: [id])
+  equipos    Equipo[]
+  createdAt  DateTime @default(now())
+}
+
+model Equipo {
+  id          String   @id @default(cuid())
+  nombre      String
+  color       String   @default("#f472b6")
+  createdAt   DateTime @default(now())
+  industriaId String
+  industria   Industria @relation(fields: [industriaId], references: [id])
+  alumnoId    String?  @unique
+  alumno      Usuario? @relation("AlumnoEquipos", fields: [alumnoId], references: [id])
+
+  marcas     Marca[]
+  decisiones Decision[]
+  estudios   CompraEstudio[]
+  proyectos  ProyectoID[]
+  reportes   Reporte[]
+}
+
+model Marca {
+  id              String  @id @default(cuid())
+  equipoId        String
+  equipo          Equipo  @relation(fields: [equipoId], references: [id])
+  nombre          String
+  precio          Float // Bs por unidad
+  publicidad      Float // miles Bs
+  produccion      Float // miles unidades
+  costoUnitario   Float // Bs por unidad
+  atributos       String // JSON [6 floats 1..10]
+  vendedores      String // JSON [3 floats] por canal
+  inventario      Float   @default(0) // miles unidades
+  awareness       Float   @default(0.05) // 0..1
+  anioLanzamiento Int
+  activa          Boolean @default(true)
+}
+
+model Decision {
+  id        String   @id @default(cuid())
+  equipoId  String
+  equipo    Equipo   @relation(fields: [equipoId], references: [id])
+  anio      Int
+  estado    String   @default("BORRADOR") // BORRADOR | ENVIADA
+  contenido String // JSON
+  createdAt DateTime @default(now())
+
+  @@unique([equipoId, anio])
+}
+
+model CompraEstudio {
+  id        String  @id @default(cuid())
+  equipoId  String
+  equipo    Equipo  @relation(fields: [equipoId], references: [id])
+  anio      Int
+  estudioId Int
+  costo     Float
+  datos     String? // JSON generado al procesar la ronda
+
+  @@unique([equipoId, anio, estudioId])
+}
+
+model ProyectoID {
+  id           String  @id @default(cuid())
+  equipoId     String
+  equipo       Equipo  @relation(fields: [equipoId], references: [id])
+  nombre       String
+  atributos    String // JSON [6 floats 1..10]
+  presupuesto  Float // miles Bs (100..1000)
+  estado       String  @default("EN_DESARROLLO") // EN_DESARROLLO | APROBADO | FALLIDO | APLICADO
+  anioInicio   Int
+  probabilidad Float   @default(0)
+
+  @@unique([equipoId, nombre])
+}
+
+// ===================== REPORTES =====================
+
+model Reporte {
+  id                   String  @id @default(cuid())
+  equipoId             String
+  equipo               Equipo  @relation(fields: [equipoId], references: [id])
+  anio                 Int
+  ventas               Float   @default(0) // miles unidades
+  ingresos             Float   @default(0) // miles Bs
+  costos               Float   @default(0) // costo de productos + inventario
+  publicidad           Float   @default(0)
+  fuerzaVentas         Float   @default(0)
+  investigacionMercado Float   @default(0)
+  contribucion         Float   @default(0)
+  participacion        Float   @default(0) // % de ventas del mercado
+  sinDecision          Boolean @default(false)
+
+  marcas ReporteMarca[]
+
+  @@unique([equipoId, anio])
+}
+
+model ReporteMarca {
+  id            String  @id @default(cuid())
+  reporteId     String
+  reporte       Reporte @relation(fields: [reporteId], references: [id])
+  marcaNombre   String
+  ventas        Float   @default(0)
+  produccion    Float   @default(0)
+  inventario    Float   @default(0)
+  ingresos      Float   @default(0)
+  costos        Float   @default(0)
+  contribucion  Float   @default(0)
+  participacion Float   @default(0)
+  porCanal      String  @default("[]") // JSON
+  porSegmento   String  @default("[]") // JSON
+}
