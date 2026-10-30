@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { api, type UsuarioSesion } from '@/lib/pacha/api-client'
+import { ManualJugador, BotonManual } from '@/components/game/manual'
 import { Loader2, Play, IceCream2, Shield, UserCog } from 'lucide-react'
 
 const DEMO = [
@@ -22,6 +23,7 @@ export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }
   const [password, setPassword] = useState('')
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [manualAbierto, setManualAbierto] = useState(false)
 
   async function entrar(u: string, p: string) {
     setCargando(true)
@@ -128,6 +130,11 @@ export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }
             </div>
           </form>
 
+          {/* Acceso al manual del jugador */}
+          <div className="mt-4">
+            <BotonManual onClick={() => setManualAbierto(true)} />
+          </div>
+
           {/* Accesos demo */}
           <div className="mt-6">
             <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
@@ -154,6 +161,10 @@ export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }
       <footer className="relative z-10 mt-auto border-t border-white/5 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[11px] text-zinc-500">
         PACHA Simulador · industrias de helados · toma decisiones, compra estudios, innova en I+D y conquista el mercado
       </footer>
+
+      <AnimatePresence>
+        {manualAbierto && <ManualJugador onCerrar={() => setManualAbierto(false)} />}
+      </AnimatePresence>
     </div>
   )
 }
