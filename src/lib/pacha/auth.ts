@@ -1,11 +1,15 @@
 // Autenticación PACHA: sesiones con cookie firmada (HMAC) + scrypt para contraseñas
+// Nota: además de la cookie, se acepta el token por cabecera `x-pacha-session`.
+// Esto es necesario cuando la app corre dentro de un iframe multi-sitio (panel de
+// vista previa), donde el navegador bloquea las cookies SameSite=Lax.
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'crypto'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { db } from '@/lib/db'
 import { PachaError } from './tipos'
 
 const SECRET = process.env.PACHA_SECRET || 'pacha-simulador-markestrat-2024'
 export const SESSION_COOKIE = 'pacha_session'
+export const SESSION_HEADER = 'x-pacha-session'
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString('hex')
@@ -55,9 +59,25 @@ export interface UsuarioSesion {
   rol: string
 }
 
+/** Lee el token de sesión: primero la cabecera (contexto iframe), luego la cookie. */
+export async function leerTokenSesion(): Promise<string | null> {
+  try {
+    const h = await headers()
+    const delHeader = h.get(SESSION_HEADER)
+    if (delHeader) return delHeader
+  } catch {
+    // fuera de un contexto de petición: ignorar
+  }
+  try {
+    const jar = await cookies()
+    return jar.get(SESSION_COOKIE)?.value ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function getUsuarioActual(): Promise<UsuarioSesion | null> {
-  const jar = await cookies()
-  const userId = leerToken(jar.get(SESSION_COOKIE)?.value)
+  const userId = leerToken(await leerTokenSesion())
   if (!userId) return null
   const u = await db.usuario.findUnique({ where: { id: userId } })
   if (!u) return null

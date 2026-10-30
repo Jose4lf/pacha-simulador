@@ -138,20 +138,74 @@ export interface DecanoEstado {
   stats: { totalUsuarios: number; profesores: number; alumnos: number; simulaciones: number }
 }
 
+// Gestión del token de sesión: se guarda en localStorage (con respaldo en memoria
+// si el storage no está disponible, ej: iframes restringidos). Enviarlo por la
+// cabecera `x-pacha-session` hace que la sesión funcione aunque el navegador
+// bloquee cookies en contextos de iframe multi-sitio (panel de vista previa).
+const TOKEN_KEY = 'pacha_session_token'
+let tokenMemoria: string | null = null
+
+function leerTokenGuardado(): string | null {
+  if (tokenMemoria) return tokenMemoria
+  try {
+    tokenMemoria = localStorage.getItem(TOKEN_KEY)
+  } catch {
+    tokenMemoria = null
+  }
+  return tokenMemoria
+}
+
+function guardarToken(t: string): void {
+  tokenMemoria = t
+  try {
+    localStorage.setItem(TOKEN_KEY, t)
+  } catch {
+    // storage no disponible: solo memoria
+  }
+}
+
+function limpiarToken(): void {
+  tokenMemoria = null
+  try {
+    localStorage.removeItem(TOKEN_KEY)
+  } catch {
+    // storage no disponible: solo memoria
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const token = leerTokenGuardado()
   const res = await fetch(url, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'x-pacha-session': token } : {}),
+      ...(init?.headers ?? {}),
+    },
   })
   const data = (await res.json().catch(() => ({}))) as T & { error?: string }
-  if (!res.ok) throw new Error(data.error || `Error ${res.status}`)
+  if (!res.ok) {
+    // Token inválido o expirado: limpiar para permitir reingreso limpio
+    if (res.status === 401) limpiarToken()
+    throw new Error(data.error || `Error ${res.status}`)
+  }
   return data
 }
 
 export const api = {
-  login: (nombre: string, password: string) =>
-    request<UsuarioSesion>('/api/auth/login', { method: 'POST', body: JSON.stringify({ nombre, password }) }),
-  logout: () => request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' }),
+  login: async (nombre: string, password: string) => {
+    const data = await request<UsuarioSesion & { token?: string }>('/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ nombre, password }),
+    })
+    if (data.token) guardarToken(data.token)
+    return data as UsuarioSesion
+  },
+  logout: async () => {
+    const data = await request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' })
+    limpiarToken()
+    return data
+  },
   session: () => request<{ usuario: UsuarioSesion | null }>('/api/auth/session'),
 
   alumnoEstado: () => request<AlumnoEstado>('/api/alumno/estado'),

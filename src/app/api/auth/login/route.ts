@@ -1,6 +1,6 @@
 import { db } from '@/lib/db'
 import { error, ok, body } from '@/lib/pacha/api-helpers'
-import { setSessionCookie, verifyPassword } from '@/lib/pacha/auth'
+import { crearToken, setSessionCookie, verifyPassword } from '@/lib/pacha/auth'
 import { seedSistema } from '@/lib/pacha/seed'
 import { PachaError } from '@/lib/pacha/tipos'
 
@@ -16,7 +16,9 @@ export async function POST(req: Request) {
     }
 
     await setSessionCookie(usuario.id)
-    return ok({ id: usuario.id, nombre: usuario.nombre, rol: usuario.rol })
+    // Se devuelve también el token para que el cliente pueda mantener la sesión
+    // por cabecera cuando las cookies están bloqueadas (ej: iframe de vista previa)
+    return ok({ id: usuario.id, nombre: usuario.nombre, rol: usuario.rol, token: crearToken(usuario.id) })
   } catch (e) {
     return error(e)
   }
