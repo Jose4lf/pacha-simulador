@@ -167,6 +167,74 @@ export const ESTUDIOS: EstudioDef[] = [
   { id: 15, nombre: 'Segmentación emergente', descripcion: 'Revela el perfil ideal de atributos de cada segmento del mercado.', costo: 150, icono: '💎', categoria: 'Mercado' },
 ]
 
+// ===================== COMITÉ DE DIRECCIÓN DE MARKETING =====================
+
+export interface Cargo {
+  id: string
+  nombre: string
+  corto: string
+  emoji: string
+  descripcion: string
+}
+
+/**
+ * Los 5 cargos del Comité de Dirección de Marketing de cada empresa.
+ * Cada cargo ES responsable de un área de la decisión anual, pero cualquier
+ * integrante puede consultar, debatir y colaborar en todas las áreas.
+ */
+export const CARGOS: Cargo[] = [
+  {
+    id: 'precios',
+    nombre: 'Gerente de Precios y Producto',
+    corto: 'Precios',
+    emoji: '💰',
+    descripcion: 'Fija el precio Bs/unidad de cada marca y vigila el costo unitario.',
+  },
+  {
+    id: 'publicidad',
+    nombre: 'Gerente de Publicidad y Promoción',
+    corto: 'Publicidad',
+    emoji: '📺',
+    descripcion: 'Define el presupuesto publicitario anual de cada marca.',
+  },
+  {
+    id: 'produccion',
+    nombre: 'Gerente de Producción',
+    corto: 'Producción',
+    emoji: '🏭',
+    descripcion: 'Planifica la producción en miles de unidades para no quedar en quiebre de stock.',
+  },
+  {
+    id: 'ventas',
+    nombre: 'Gerente de Distribución y Ventas',
+    corto: 'Distribución',
+    emoji: '🚚',
+    descripcion: 'Reparte la fuerza de ventas entre tiendas, supermercados y kioscos.',
+  },
+  {
+    id: 'investigacion',
+    nombre: 'Gerente de Investigación y Desarrollo',
+    corto: 'I+D',
+    emoji: '🔬',
+    descripcion: 'Compra estudios de mercado, coordina el I+D y lanza las marcas nuevas.',
+  },
+]
+
+export const CARGO_IDS = CARGOS.map((c) => c.id)
+
+export function esCargoValido(cargo: string): boolean {
+  return CARGO_IDS.includes(cargo)
+}
+
+/** Reglas de puntos de desempeño de los gerentes (elegidas por el docente). */
+export const DESEMPENO = {
+  puntosIniciales: 0,
+  premioTrabajar: 5, // +5 si su área envió borrador
+  penalizacionSinTrabajar: -10, // −10 si su área quedó "sin trabajar"
+  umbralPenalizable: -20, // a este nivel el comité ya puede penalizarlo
+  restaMaximaPenalizacion: 100, // tope que el grupo puede restar en una sanción
+}
+
 // ===================== I+D =====================
 
 export const ID_CONFIG = {

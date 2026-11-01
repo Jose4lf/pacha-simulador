@@ -5,18 +5,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { api, type UsuarioSesion } from '@/lib/pacha/api-client'
+import { api, fetchCuentas, type CuentaActiva, type UsuarioSesion } from '@/lib/pacha/api-client'
 import { ManualJugador, BotonManual } from '@/components/game/manual'
-import { Loader2, Play, IceCream2, Shield, UserCog } from 'lucide-react'
-
-const DEMO = [
-  { rol: 'Decano', usuario: 'Admin', icono: '🛡️' },
-  { rol: 'Profesor', usuario: 'profe', icono: '🎓' },
-  { rol: 'Alumno', usuario: 'colibri', icono: '🐦' },
-  { rol: 'Alumno', usuario: 'kallpa', icono: '⚡' },
-  { rol: 'Alumno', usuario: 'inti', icono: '☀️' },
-  { rol: 'Alumno', usuario: 'pachamama', icono: '🌍' },
-]
+import { GuiaPartida, BotonGuia } from '@/components/game/guia-partida'
+import { BotonTema } from '@/components/game/selector-tema'
+import { Loader2, Play, IceCream2, Shield, UserCog, Download } from 'lucide-react'
 
 export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }) {
   const [nombre, setNombre] = useState('')
@@ -24,6 +17,13 @@ export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }
   const [cargando, setCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [manualAbierto, setManualAbierto] = useState(false)
+  const [guiaAbierta, setGuiaAbierta] = useState(false)
+  // Cuentas ACTUALES del sistema: el administrador y los profesores registrados
+  const [cuentas, setCuentas] = useState<CuentaActiva[]>([])
+
+  useEffect(() => {
+    void fetchCuentas().then(setCuentas)
+  }, [])
 
   async function entrar(u: string, p: string) {
     setCargando(true)
@@ -130,30 +130,57 @@ export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }
             </div>
           </form>
 
-          {/* Acceso al manual del jugador */}
-          <div className="mt-4">
+          {/* Acceso al manual del jugador y a la guía paso a paso */}
+          <div className="mt-4 space-y-2">
             <BotonManual onClick={() => setManualAbierto(true)} />
+            <BotonGuia onClick={() => setGuiaAbierta(true)} />
           </div>
 
-          {/* Accesos demo */}
+          {/* Descargas: manual y guía en PDF */}
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <a
+              href="/docs/manual-usuario.pdf"
+              download
+              className="pacha-btn-game flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-amber-500/30 bg-amber-500/5 px-2 py-2 text-[11px] font-bold text-amber-300 hover:bg-amber-500/15"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" /> Manual (PDF)
+            </a>
+            <a
+              href="/docs/guia-partida-paso-a-paso.pdf"
+              download
+              className="pacha-btn-game flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-2 py-2 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/15"
+            >
+              <Download className="h-3.5 w-3.5" aria-hidden="true" /> Guía (PDF)
+            </a>
+          </div>
+
+          {/* Cuentas actuales del sistema (administrador + profesores registrados) */}
           <div className="mt-6">
             <p className="mb-2 text-center text-[11px] font-semibold uppercase tracking-widest text-zinc-500">
-              Cuentas de demostración (contraseña: 321)
+              Cuentas actuales (administrador y profesores)
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {DEMO.map((d) => (
-                <button
-                  key={d.usuario}
-                  type="button"
-                  onClick={() => void entrar(d.usuario, '321')}
-                  disabled={cargando}
-                  className="pacha-btn-game flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-xs font-semibold text-zinc-300 hover:border-pink-400/40 hover:bg-white/10 disabled:opacity-50"
-                >
-                  <span aria-hidden="true">{d.icono}</span>
-                  {d.usuario}
-                </button>
-              ))}
-            </div>
+            {cuentas.length === 0 ? (
+              <p className="text-center text-[11px] text-zinc-600">Cargando cuentas…</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {cuentas.map((c) => (
+                  <button
+                    key={c.nombre}
+                    type="button"
+                    onClick={() => void entrar(c.nombre, '321')}
+                    disabled={cargando}
+                    title={`${c.rol === 'DECANO' ? 'Administrador' : 'Profesor'} · ${c.nombre}`}
+                    className="pacha-btn-game flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2 py-2 text-xs font-semibold text-zinc-300 hover:border-pink-400/40 hover:bg-white/10 disabled:opacity-50"
+                  >
+                    <span aria-hidden="true">{c.rol === 'DECANO' ? '🛡️' : '🎓'}</span>
+                    {c.nombre}
+                  </button>
+                ))}
+              </div>
+            )}
+            <p className="mt-2 text-center text-[10px] text-zinc-600">
+              Los alumnos entran con el usuario que les asignó su profesor.
+            </p>
           </div>
         </motion.div>
       </main>
@@ -162,8 +189,14 @@ export function LoginScreen({ onLogin }: { onLogin: (u: UsuarioSesion) => void }
         PACHA Simulador · industrias de helados · toma decisiones, compra estudios, innova en I+D y conquista el mercado
       </footer>
 
+      {/* Selector de diseño: flotante sobre la esquina inferior derecha del login */}
+      <div className="fixed bottom-4 right-4 z-50">
+        <BotonTema />
+      </div>
+
       <AnimatePresence>
         {manualAbierto && <ManualJugador onCerrar={() => setManualAbierto(false)} />}
+        {guiaAbierta && <GuiaPartida onCerrar={() => setGuiaAbierta(false)} />}
       </AnimatePresence>
     </div>
   )

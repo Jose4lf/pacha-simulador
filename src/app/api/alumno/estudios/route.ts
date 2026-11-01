@@ -7,11 +7,12 @@ import { parseJson, PachaError } from '@/lib/pacha/tipos'
 export async function GET() {
   try {
     const usuario = await requireRol('ALUMNO')
-    const equipo = await db.equipo.findUnique({
-      where: { alumnoId: usuario.id },
-      include: { industria: true },
+    const membresia = await db.membresia.findFirst({
+      where: { usuarioId: usuario.id },
+      include: { equipo: { include: { industria: true } } },
     })
-    if (!equipo) throw new PachaError('No tienes un equipo asignado', 404)
+    if (!membresia) throw new PachaError('No perteneces a ninguna empresa', 404)
+    const equipo = membresia.equipo
 
     const compras = await db.compraEstudio.findMany({
       where: { equipoId: equipo.id },

@@ -3,12 +3,12 @@ import { hashPassword, requireRol } from '@/lib/pacha/auth'
 import { db } from '@/lib/db'
 import { PachaError } from '@/lib/pacha/tipos'
 
-/** Decano: crea usuarios o resetea contraseñas. */
+/** Decano: crea usuarios, resetea contraseñas o elimina alumnos y profesores. */
 export async function POST(req: Request) {
   try {
-    await requireRol('DECANO')
+    const actual = await requireRol('DECANO')
     const datos = await body<{
-      accion: 'crear' | 'reset'
+      accion: 'crear' | 'reset' | 'eliminar'
       nombre?: string
       password?: string
       rol?: string
@@ -37,6 +37,38 @@ export async function POST(req: Request) {
         data: { passwordHash: hashPassword(nueva) },
       })
       return ok({ ok: true, nueva })
+    }
+
+    if (datos.accion === 'eliminar') {
+      if (!datos.usuarioId) throw new PachaError('Falta el usuario')
+      const objetivo = await db.usuario.findUnique({
+        where: { id: datos.usuarioId },
+        include: { membresias: true, industriasProfesor: true },
+      })
+      if (!objetivo) throw new PachaError('Usuario no encontrado', 404)
+      if (objetivo.rol === 'DECANO') throw new PachaError('No se puede eliminar a un administrador')
+      if (objetivo.id === actual.id) throw new PachaError('No puedes eliminarte a ti mismo')
+      if (objetivo.industriasProfesor.length > 0) {
+        throw new PachaError(
+          `Este profesor tiene ${objetivo.industriasProfesor.length} simulación(es) a su cargo. Elímínalas primero.`
+        )
+      }
+
+      // Sanciones que este usuario registró: las auditorías se conservan, así que
+      // si registró alguna no se puede borrar sin perder el registro.
+      const registradas = await db.penalizacion.count({ where: { registradaPorId: objetivo.id } })
+      if (registradas > 0) {
+        throw new PachaError(
+          'Este usuario registró sanciones en el historial del comité; no se puede eliminar sin perder esa auditoría.'
+        )
+      }
+
+      // Borradores enviados: queda el contenido, sin autor
+      await db.borradorArea.updateMany({ where: { enviadoPorId: objetivo.id }, data: { enviadoPorId: null } })
+      await db.penalizacion.deleteMany({ where: { usuarioId: objetivo.id } })
+      await db.membresia.deleteMany({ where: { usuarioId: objetivo.id } })
+      await db.usuario.delete({ where: { id: objetivo.id } })
+      return ok({ ok: true, nombre: objetivo.nombre })
     }
 
     throw new PachaError('Acción inválida')

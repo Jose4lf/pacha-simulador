@@ -44,6 +44,50 @@ export interface DecisionContenidoPayload {
   estudios: number[]
 }
 
+export interface CargoFront {
+  id: string
+  nombre: string
+  corto: string
+  emoji: string
+  descripcion: string
+}
+
+export interface DesempenoConfig {
+  puntosIniciales: number
+  premioTrabajar: number
+  penalizacionSinTrabajar: number
+  umbralPenalizable: number
+  restaMaximaPenalizacion: number
+}
+
+export interface GerenteComite {
+  usuarioId: string
+  nombre: string
+  cargo: string
+  puntos: number
+}
+
+export interface BorradorAreaFront {
+  cargo: string
+  contenido: Record<string, unknown>
+  enviadoPor: string
+  enviadoPorId: string | null
+  enviadoAt: string | null
+  updatedAt: string
+}
+
+export interface PenalizacionFront {
+  id: string
+  usuarioId: string
+  gerente: string
+  tipo: 'AMONESTACION' | 'PUNTOS' | 'EXPULSION' | string
+  puntos: number
+  motivo: string
+  anio: number
+  registradaPor: string
+  createdAt: string
+}
+
 export interface ProyectoEstado {
   id: string
   nombre: string
@@ -91,16 +135,65 @@ export interface EstudioDefFront {
 
 export interface AlumnoEstado {
   usuario: UsuarioSesion
+  membresia: { cargo: string; puntos: number }
   equipo: { id: string; nombre: string; color: string }
   industria: { id: string; nombre: string; anioActual: number; anioMaximo: number; estado: string }
   marcas: MarcaEstado[]
   decision: { estado: string; contenido: DecisionContenidoPayload } | null
+  comite: GerenteComite[]
+  borradores: BorradorAreaFront[]
+  penalizaciones: PenalizacionFront[]
+  cargos: CargoFront[]
+  desempeno: DesempenoConfig
   proyectos: ProyectoEstado[]
   reportes: ReporteResumen[]
   estudiosComprados: { anio: number; estudioId: number; costo: number; tieneDatos: boolean }[]
   costoEstudiosAnio: number
   ranking: RankingFila[]
   config: { id: { presupuestoMin: number; presupuestoMax: number; maxProyectosPorAnio: number; maxNombresPorSimulacion: number }; catalogoEstudios: EstudioDefFront[] }
+  /** Permisos de área: qué áreas abrió su encargado al resto del equipo. */
+  permisos: { cargo: string; abierto: boolean }[]
+  /** Eventos que ocurren/ocurrieron dentro de esta simulación, por año (doc §15). */
+  eventos: EventoAlumno[]
+  /** Historia contable por marca y año (reportes del equipo). */
+  marcasHistoria: MarcaHistoriaFila[]
+}
+
+export interface EventoAlumno {
+  anio: number
+  nombre: string
+  categoria: string
+  region: string
+  meses: number[]
+  efectoDemanda: number
+  efectoCosto: number
+  efectoLogistica: number
+  canal: string | null
+  origen: string
+  activo: boolean
+}
+
+export interface MarcaHistoriaFila {
+  anio: number
+  marcaNombre: string
+  ventas: number
+  produccion: number
+  inventario: number
+  ingresos: number
+  costos: number
+  contribucion: number
+  participacion: number
+  porCanal: { canalId: string; ventas: number }[]
+}
+
+export interface CuentaActiva {
+  nombre: string
+  rol: string
+}
+
+export interface EmpresaCrearPayload {
+  nombre: string
+  integrantes: { usuario: string; nombre?: string }[]
 }
 
 export interface ProfesorIndustria {
@@ -113,14 +206,17 @@ export interface ProfesorIndustria {
     id: string
     nombre: string
     color: string
-    alumno: string | null
     numMarcas: number
+    marcas: { id: string; nombre: string }[]
+    integrantes: { usuarioId: string; nombre: string; cargo: string; puntos: number }[]
     decisionEstado: string
-    enviada: boolean
-    sinBorrador: boolean
+    decisionId: string | null
+    aprobada: boolean
+    contenido: DecisionContenidoPayload | null
+    areasSinBorrador: string[]
+    areasTrabajadas: string[]
   }[]
   ranking: RankingFila[]
-  alumnosDisponibles: { id: string; nombre: string }[]
 }
 
 export interface DecanoEstado {
@@ -192,6 +288,20 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return data
 }
 
+/**
+ * Cabeceras de sesión para `fetch` directos fuera del cliente `api`.
+ * Evita el error «No autenticado» cuando el navegador bloquea cookies
+ * (app dentro del iframe del panel de vista previa): la identidad viaja
+ * por la cabecera `x-pacha-session`.
+ */
+export function cabecerasSesion(): Record<string, string> {
+  const token = leerTokenGuardado()
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'x-pacha-session': token } : {}),
+  }
+}
+
 export const api = {
   login: async (nombre: string, password: string) => {
     const data = await request<UsuarioSesion & { token?: string }>('/api/auth/login', {
@@ -209,15 +319,23 @@ export const api = {
   session: () => request<{ usuario: UsuarioSesion | null }>('/api/auth/session'),
 
   alumnoEstado: () => request<AlumnoEstado>('/api/alumno/estado'),
-  guardarBorrador: (contenido: DecisionContenidoPayload) =>
+
+  /** Envía el borrador de UNA área del comité (queda visible para todo el equipo). */
+  enviarBorradorArea: (cargo: string, contenido: unknown) =>
     request<{ ok: boolean }>('/api/alumno/decisiones', {
       method: 'POST',
-      body: JSON.stringify({ accion: 'borrador', contenido }),
+      body: JSON.stringify({ accion: 'borrador-area', cargo, contenido }),
     }),
+  /** Envía la decisión consolidada del año al docente. */
   enviarDecision: () =>
-    request<{ ok: boolean; estudiosComprados: number }>('/api/alumno/decisiones', {
+    request<{ ok: boolean; areasSinTrabajar: string[]; estudiosComprados: number }>('/api/alumno/decisiones', {
       method: 'POST',
       body: JSON.stringify({ accion: 'enviar' }),
+    }),
+  penalizarGerente: (usuarioId: string, tipo: 'AMONESTACION' | 'PUNTOS' | 'EXPULSION', puntos?: number, motivo?: string) =>
+    request<{ ok: boolean; puntosRestados: number; expulsado: boolean; nuevoPuntos: number }>('/api/alumno/penalizar', {
+      method: 'POST',
+      body: JSON.stringify({ usuarioId, tipo, puntos, motivo }),
     }),
   registrarProyecto: (nombre: string, atributos: number[], presupuesto: number) =>
     request<{ ok: boolean }>('/api/alumno/proyectos', {
@@ -226,24 +344,24 @@ export const api = {
     }),
 
   profesorEstado: () => request<{ industrias: ProfesorIndustria[] }>('/api/profesor/estado'),
-  crearIndustria: (nombre: string, equipos: string[]) =>
-    request<{ id: string; nombre: string }>('/api/profesor/industrias', {
+  crearIndustria: (nombre: string, periodos: number, empresas: EmpresaCrearPayload[]) =>
+    request<{ id: string; nombre: string; anioMaximo: number }>('/api/profesor/industrias', {
       method: 'POST',
-      body: JSON.stringify({ nombre, equipos }),
+      body: JSON.stringify({ nombre, periodos, empresas }),
+    }),
+  aprobarDecision: (decisionId: string, aprobada: boolean) =>
+    request<{ ok: boolean; estado: string }>('/api/profesor/aprobar', {
+      method: 'POST',
+      body: JSON.stringify({ decisionId, aprobada }),
     }),
   procesarRonda: (industriaId: string) =>
     request<{
       anioProcesado: number
       anioNuevo: number
       finalizada: boolean
-      equiposSinDecision: string[]
+      equiposSinVistoBueno: string[]
       ventasTotales: number
     }>('/api/profesor/procesar', { method: 'POST', body: JSON.stringify({ industriaId }) }),
-  asignarAlumno: (equipoId: string, alumnoId: string | null) =>
-    request<{ ok: boolean }>('/api/profesor/asignar', {
-      method: 'POST',
-      body: JSON.stringify({ equipoId, alumnoId }),
-    }),
 
   decanoEstado: () => request<DecanoEstado>('/api/decano/estado'),
   crearUsuario: (nombre: string, password: string, rol: string) =>
@@ -256,6 +374,30 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ accion: 'reset', usuarioId, nueva }),
     }),
+  eliminarUsuario: (usuarioId: string) =>
+    request<{ ok: boolean; nombre: string }>('/api/decano/usuarios', {
+      method: 'POST',
+      body: JSON.stringify({ accion: 'eliminar', usuarioId }),
+    }),
+
+  // Permiso de área: el encargado abre/cierra su área al resto del equipo
+  cambiarPermisoArea: (cargo: string, abierto: boolean) =>
+    request<{ ok: boolean; cargo: string; abierto: boolean }>('/api/alumno/permisos', {
+      method: 'POST',
+      body: JSON.stringify({ cargo, abierto }),
+    }),
+}
+
+/** Cuentas reales del sistema (administrador + profesores) para el login. */
+export async function fetchCuentas(): Promise<CuentaActiva[]> {
+  try {
+    const res = await fetch('/api/auth/cuentas', { cache: 'no-store' })
+    if (!res.ok) return []
+    const d = (await res.json()) as { cuentas: CuentaActiva[] }
+    return d.cuentas ?? []
+  } catch {
+    return []
+  }
 }
 
 export interface ReporteDetalle {
@@ -269,6 +411,39 @@ export interface ReporteDetalle {
   contribucion: number
   participacion: number
   sinDecision: boolean
+  historia?: {
+    anio: number
+    ventasMercado: number
+    ventasEquipo: number
+    participacion: number
+    contribucion: number
+  }[]
+  detalle?: {
+    mercado?: { demandaTotal: number; ventasEmpresas: number; ventasResto: number; capturaEmpresas: number }
+    detalleMensual?: { mes: number; demandaTotal: number; ventasEmpresas: number; ventasResto: number }[]
+    porRegion?: { regionId: string; ventas: number }[]
+    finanzas?: Record<string, number | boolean> | null
+    produccionAnio?: Record<string, number> | null
+    marcasMensual?: Record<string, number[]>
+    inflacion?: {
+      anio: number
+      escenario: string
+      pi: number
+      factores: { factor: string; senal: number; aporte: number }[]
+      indicePreciosFin: number
+      tipoCambioFinal: number
+      tasasComponentes: Record<string, number>
+    }
+    eventos?: { variable: string; region: string; mes: number; eventos: { nombre: string; efecto: number; peso: number }[]; total: number }[]
+  }
+  macroHistoria?: {
+    anio: number
+    escenario: string
+    inflacionAnual: number
+    indicePreciosFin: number
+    tipoCambioFinal: number
+    factores: { factor: string; senal: number; aporte: number }[]
+  }[]
   marcas: {
     marcaNombre: string
     ventas: number

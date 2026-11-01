@@ -1,24 +1,26 @@
 import { error, ok, body } from '@/lib/pacha/api-helpers'
 import { requireRol } from '@/lib/pacha/auth'
 import { db } from '@/lib/db'
-import { enviarDecision, guardarBorrador } from '@/lib/pacha/simulacion'
-import { PachaError, type DecisionContenido } from '@/lib/pacha/tipos'
+import { enviarDecision, guardarBorradorArea } from '@/lib/pacha/simulacion'
+import { PachaError } from '@/lib/pacha/tipos'
+
+type Accion = 'borrador-area' | 'enviar'
 
 export async function POST(req: Request) {
   try {
     const usuario = await requireRol('ALUMNO')
-    const equipo = await db.equipo.findUnique({ where: { alumnoId: usuario.id } })
-    if (!equipo) throw new PachaError('No tienes un equipo asignado', 404)
+    const membresia = await db.membresia.findFirst({ where: { usuarioId: usuario.id } })
+    if (!membresia) throw new PachaError('No perteneces a ninguna empresa', 404)
 
-    const { accion, contenido } = await body<{ accion: 'borrador' | 'enviar'; contenido?: DecisionContenido }>(req)
+    const { accion, cargo, contenido } = await body<{ accion: Accion; cargo?: string; contenido?: unknown }>(req)
 
-    if (accion === 'borrador') {
-      if (!contenido) throw new PachaError('Falta el contenido de la decisión')
-      const res = await guardarBorrador(equipo.id, contenido)
+    if (accion === 'borrador-area') {
+      if (!cargo) throw new PachaError('Falta el cargo (área) del borrador')
+      const res = await guardarBorradorArea(membresia.equipoId, usuario.id, cargo, contenido ?? {})
       return ok(res)
     }
     if (accion === 'enviar') {
-      const res = await enviarDecision(equipo.id)
+      const res = await enviarDecision(membresia.equipoId, usuario.id)
       return ok(res)
     }
     throw new PachaError('Acción inválida')

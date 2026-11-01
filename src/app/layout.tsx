@@ -27,8 +27,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Aplica el tema guardado antes del primer pintado para evitar parpadeo.
+  const scriptTema = `try{if(localStorage.getItem('pacha_tema')==='tinta')document.documentElement.dataset.theme='tinta'}catch(e){}`;
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: scriptTema }} />
+      </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
       >

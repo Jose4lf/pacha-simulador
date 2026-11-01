@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Factory, GraduationCap, KeyRound, Loader2, Plus, Shield, UserCog, Users } from 'lucide-react'
+import { Factory, GraduationCap, KeyRound, Loader2, Plus, Shield, Trash2, UserCog, Users } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { api, type DecanoEstado, type UsuarioSesion } from '@/lib/pacha/api-client'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,16 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Hud } from '@/components/game/hud'
 import { SplashCarga } from '@/components/game/login-screen'
@@ -80,6 +90,8 @@ export function DecanoPanel({ usuario, onLogout }: { usuario: UsuarioSesion; onL
   const [rolNuevo, setRolNuevo] = useState('ALUMNO')
   const [creando, setCreando] = useState(false)
   const [reseteando, setReseteando] = useState<string | null>(null)
+  const [eliminando, setEliminando] = useState<{ id: string; nombre: string } | null>(null)
+  const [borrando, setBorrando] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -140,6 +152,25 @@ export function DecanoPanel({ usuario, onLogout }: { usuario: UsuarioSesion; onL
     }
   }
 
+  /** Elimina un alumno o profesor del sistema (con confirmación). */
+  async function eliminarUsuario() {
+    if (!eliminando) return
+    setBorrando(true)
+    try {
+      const r = await api.eliminarUsuario(eliminando.id)
+      toast({
+        title: '🗑️ Usuario eliminado',
+        description: `«${r.nombre}» ya no puede iniciar sesión.`,
+      })
+      setEliminando(null)
+      await refresh()
+    } catch (e) {
+      toast({ title: 'No se pudo eliminar', description: msg(e), variant: 'destructive' })
+    } finally {
+      setBorrando(false)
+    }
+  }
+
   if (cargando) return <SplashCarga />
 
   if (error || !data) {
@@ -167,8 +198,6 @@ export function DecanoPanel({ usuario, onLogout }: { usuario: UsuarioSesion; onL
       <Hud
         titulo="Rectorado · Decanato"
         subtitulo={usuario.nombre}
-        anioActual={0}
-        anioMaximo={10}
         jugador={{ nombre: usuario.nombre, rol: 'DECANO' }}
         stats={[
           { label: 'Usuarios', valor: String(data.stats.totalUsuarios), color: 'text-pink-300' },
@@ -307,22 +336,37 @@ export function DecanoPanel({ usuario, onLogout }: { usuario: UsuarioSesion; onL
                         {FECHA_FMT.format(new Date(u.createdAt))}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void resetPassword(u.id, u.nombre)}
-                          disabled={reseteando === u.id}
-                          aria-label={`Resetear contraseña de ${u.nombre}`}
-                          className="h-8 border-white/15 bg-white/5 text-xs font-bold text-zinc-200 hover:bg-white/10"
-                        >
-                          {reseteando === u.id ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                          ) : (
-                            <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                        <div className="flex justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void resetPassword(u.id, u.nombre)}
+                            disabled={reseteando === u.id}
+                            aria-label={`Resetear contraseña de ${u.nombre}`}
+                            className="h-8 border-white/15 bg-white/5 text-xs font-bold text-zinc-200 hover:bg-white/10"
+                          >
+                            {reseteando === u.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+                            )}
+                            🔑 Reset 321
+                          </Button>
+                          {u.rol !== 'DECANO' && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEliminando({ id: u.id, nombre: u.nombre })}
+                              aria-label={`Eliminar a ${u.nombre}`}
+                              className="h-8 border-red-400/30 bg-red-500/10 px-2 text-xs font-bold text-red-300 hover:bg-red-500/20"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                              <span className="sr-only">Eliminar</span>
+                            </Button>
                           )}
-                          🔑 Reset 321
-                        </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -393,6 +437,33 @@ export function DecanoPanel({ usuario, onLogout }: { usuario: UsuarioSesion; onL
       <footer className="mt-auto border-t border-white/5 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] text-center text-[11px] text-zinc-500">
         PACHA Simulador · Markestrat · Industria de helados
       </footer>
+
+      {/* Confirmación de eliminación de usuario */}
+      <AlertDialog open={eliminando !== null} onOpenChange={(v) => !v && setEliminando(null)}>
+        <AlertDialogContent className="border-white/10 bg-[#1c1528] text-zinc-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100">
+              ¿Eliminar a «{eliminando?.nombre}»?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              El usuario dejará de poder iniciar sesión y perderá su cargo en la empresa. Esta acción no se puede
+              deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/10 bg-transparent text-zinc-200 hover:bg-white/10 hover:text-zinc-100">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void eliminarUsuario()}
+              disabled={borrando}
+              className="bg-red-600 font-black text-white hover:bg-red-500"
+            >
+              {borrando ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : '🗑️ Sí, eliminar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { IceCream2, LogOut } from 'lucide-react'
+import { BotonTema } from '@/components/game/selector-tema'
 
 export interface HudTab {
   id: string
@@ -22,8 +23,8 @@ export interface HudStat {
 interface HudProps {
   titulo: string
   subtitulo?: string
-  anioActual: number
-  anioMaximo: number
+  anioActual?: number
+  anioMaximo?: number
   estadoIndustria?: string
   jugador: { nombre: string; color?: string; rol?: string }
   stats: HudStat[]
@@ -49,8 +50,9 @@ export function Hud({
   onLogout,
   children,
 }: HudProps) {
-  const progreso = anioMaximo > 0 ? Math.min(100, (anioActual / anioMaximo) * 100) : 0
+  const progreso = anioActual !== undefined && anioMaximo ? Math.min(100, (anioActual / anioMaximo) * 100) : 0
   const finalizada = estadoIndustria === 'FINALIZADA'
+  const mostrarAnio = anioActual !== undefined && anioMaximo !== undefined
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/10 bg-[#140f1c]/90 backdrop-blur">
@@ -68,7 +70,8 @@ export function Hud({
             </div>
           </div>
 
-          {/* Año / nivel */}
+          {/* Año / nivel (solo si la vista maneja años, p. ej. no aplica al decano) */}
+          {mostrarAnio && (
           <div className="min-w-[120px] flex-1 sm:flex-none">
             <div className="mb-1 flex items-center justify-between gap-2">
               <span className="text-[11px] font-black uppercase tracking-wider text-amber-300">
@@ -84,6 +87,7 @@ export function Hud({
               />
             </div>
           </div>
+          )}
 
           {/* Stats del jugador */}
           <div className="order-3 flex w-full flex-wrap items-center gap-2 sm:order-none sm:w-auto">
@@ -105,6 +109,7 @@ export function Hud({
               <span className="hidden h-3 w-3 rounded-full sm:inline-block" style={{ backgroundColor: jugador.color }} aria-hidden="true" />
             )}
             <span className="hidden text-sm font-bold text-zinc-200 md:inline">{jugador.nombre}</span>
+            <BotonTema />
             <Button
               variant="ghost"
               size="icon"

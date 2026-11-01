@@ -29,7 +29,9 @@ interface Capitulo {
 
 const CAPITULOS: Capitulo[] = [
   { id: 'bienvenida', emoji: '🍦', titulo: 'Bienvenida' },
+  { id: 'comite', emoji: '👥', titulo: 'El comité y los borradores' },
   { id: 'mercado', emoji: '🗺️', titulo: 'El mercado' },
+  { id: 'bolivia', emoji: '🇧🇴', titulo: 'Bolivia: mercado, eventos e inflación' },
   { id: 'decisiones', emoji: '🎛️', titulo: 'Tus decisiones' },
   { id: 'id', emoji: '🧪', titulo: 'Atributos e I+D' },
   { id: 'estudios', emoji: '🔍', titulo: 'Estudios de mercado' },
@@ -174,24 +176,27 @@ function Chip({ children, color = 'pink' }: { children: React.ReactNode; color?:
 
 function CapBienvenida() {
   const pasos = [
-    { n: 1, t: 'Decide', d: 'Ajusta precio, publicidad, producción y vendedores de cada marca. Guarda borradores cuantas veces quieras.' },
-    { n: 2, t: 'Envía', d: 'Al enviar, tu decisión se bloquea: ya no se puede modificar ese año.' },
-    { n: 3, t: 'El profesor procesa', d: 'El motor simula el año para todos los equipos: demanda, ventas, resultados e I+D.' },
-    { n: 4, t: 'Analiza', d: 'Abre tus reportes por marca, canal y segmento, revisa los estudios comprados y prepárate para el próximo año.' },
+    { n: 1, t: 'Cada área decide', d: 'Cada gerente trabaja su área (precios, publicidad, producción, distribución o I+D) y envía su borrador al comité.' },
+    { n: 2, t: 'El comité revisa', d: 'Todos ven los borradores en la pestaña Comité. Si un área no envió, se verá “sin trabajar” con valores predeterminados.' },
+    { n: 3, t: 'Envío al docente', d: 'Cuando todos revisaron, el comité envía la decisión del año. El docente la revisa y da el visto bueno.' },
+    { n: 4, t: 'El profesor corre el año', d: 'El motor simula el mercado y genera los reportes del año. Después, todos analizan y se repite el ciclo.' },
   ]
   return (
     <div>
       <Titulo>🍦 Bienvenida a PACHA</Titulo>
       <Parrafo>
         <strong className="text-zinc-100">PACHA</strong> es un simulador de marketing estilo videojuego por
-        equipos: dirigirás una firma de helados compitiendo en el mercado boliviano contra otras firmas de tu
-        clase. Cada año tomarás decisiones de precios, publicidad, producción, fuerza de ventas, estudios de
-        mercado e I+D. Después, el motor simula el mercado y te devuelve los resultados.
+        empresas: forman parte de un <strong className="text-zinc-100">Comité de Dirección de Marketing</strong>{' '}
+        de 5 gerentes que dirige una firma de helados, compitiendo contra otras empresas de tu clase (de 2 a 10
+        por mercado). Cada año toman decisiones de precios, publicidad, producción, fuerza de ventas, estudios
+        de mercado e I+D. Después, el motor simula el mercado y les devuelve los resultados.
       </Parrafo>
       <Parrafo>
-        La partida dura del <Chip>Año 0</Chip> (diagnóstico inicial, sin decisiones) hasta el{' '}
-        <Chip>Año 10</Chip>. <strong className="text-zinc-100">Gana el equipo con mayor contribución
-        acumulada</strong> (tu utilidad operativa), no necesariamente el que más vende.
+        Cada empresa arranca con <Chip>2 marcas</Chip>. La partida dura la cantidad de periodos que configure el
+        docente: el <Chip>Año 0</Chip> es el <strong className="text-zinc-100">reporte general</strong> que
+        muestra la historia de los 3 años anteriores, y de ahí en adelante cada año se decide y se corre.
+        <strong className="text-zinc-100"> Gana la empresa con mayor contribución acumulada</strong> (su
+        utilidad operativa), no necesariamente la que más vende.
       </Parrafo>
 
       <Subtitulo>El ciclo de cada año</Subtitulo>
@@ -210,8 +215,8 @@ function CapBienvenida() {
       </div>
 
       <Tip>
-        Tu profesor te dará usuario y contraseña (las cuentas demo usan la contraseña <strong>321</strong>). Si
-        el botón de tu equipo no funciona, escríbela manualmente y pulsa <strong>▶ JUGAR</strong>.
+        Tu profesor te dará usuario y contraseña (las cuentas demo usan la contraseña <strong>321</strong>). Cada
+        gerente entra con su propio usuario: todos ven la misma empresa y colaboran en las decisiones.
       </Tip>
 
       <Subtitulo>Unidades del juego (¡importante!)</Subtitulo>
@@ -229,6 +234,98 @@ function CapBienvenida() {
         publicidad es <strong>&ldquo;350&rdquo;</strong> son <strong>Bs 350.000</strong>. Tu precio{' '}
         <strong>&ldquo;6.0&rdquo;</strong> significa <strong>Bs 6 por helado</strong>.
       </Ejemplo>
+    </div>
+  )
+}
+
+// ---------- Capítulo: comité y borradores ----------
+
+function CapComite() {
+  return (
+    <div>
+      <Titulo>👥 El Comité de Dirección de Marketing</Titulo>
+      <Parrafo>
+        Cada empresa la dirige un comité de <strong className="text-zinc-100">5 gerentes</strong>, cada uno con
+        un cargo y su responsabilidad. Cada área pertenece a su gerente: el comité lo revisa todo, pero
+        <strong className="text-zinc-100"> solo el encargado trabaja su área</strong>, salvo que abra el permiso
+        al equipo.
+      </Parrafo>
+      <Tabla
+        encabezados={['Cargo', 'Responsabilidad']}
+        filas={[
+          ['💰 Gerente de Precios y Producto', 'Precio Bs/unidad de cada marca y vigilancia del costo unitario.'],
+          ['📺 Gerente de Publicidad y Promoción', 'Presupuesto publicitario anual de cada marca.'],
+          ['🏭 Gerente de Producción', 'Producción en miles de unidades para evitar quiebres de stock.'],
+          ['🚚 Gerente de Distribución y Ventas', 'Fuerza de ventas por canal (tiendas, supermercados, kioscos).'],
+          ['🔬 Gerente de Investigación y Desarrollo', 'Compra de estudios, I+D y lanzamiento de marcas nuevas.'],
+        ]}
+      />
+
+      <Subtitulo>Las áreas: bloqueadas y con permiso</Subtitulo>
+      <Lista
+        items={[
+          <>
+            Tu pestaña <strong className="text-zinc-100">Mi área</strong> tiene el editor de decisiones de tu
+            cargo y los <strong className="text-zinc-100">reportes contables del área</strong>: tus números,
+            tablas y gráficos. Si quieres ver todos los datos de la empresa, ve a{' '}
+            <strong className="text-zinc-100">Reportes generales</strong>.
+          </>,
+          <>
+            En <strong className="text-zinc-100">Decisiones</strong> ves las 5 áreas: la tuya editable y las
+            demás <Chip color="amber">🔒 bloqueadas</Chip> — solo su encargado puede trabajarlas.
+          </>,
+          <>
+            ¿Quieren colaborar? Desde <strong className="text-zinc-100">Mi área</strong>, el encargado pulsa{' '}
+            <Chip color="emerald">Abrir mi área al equipo</Chip> y el resto del comité ya puede trabajar ahí
+            con él. Puede volver a cerrarla cuando quiera.
+          </>,
+          <>
+            El botón <Chip color="emerald">Enviar borrador del área</Chip> publica esa área en la pestaña{' '}
+            <strong className="text-zinc-100">Comité</strong>, donde el equipo revisa lo decidido por área en
+            números (precios, presupuestos, producción, vendedores, estudios).
+          </>,
+          <>
+            El <strong className="text-zinc-100">Gerente de I+D</strong> es el único con las pestañas de
+            Estudios e I+D: registra proyectos y, cuando uno se aprueba, el comité puede lanzar la marca nueva
+            desde el área de Investigación.
+          </>,
+          <>
+            Si un área <strong className="text-zinc-100">no envía borrador</strong>, el comité la verá marcada
+            <Chip color="pink">sin trabajar</Chip> con los valores predeterminados (los vigentes de tus marcas).
+          </>,
+          <>
+            Después de revisar los borradores de todos, cualquier gerente puede pulsar{' '}
+            <Chip color="emerald">Enviar decisión del año</Chip>: eso consolida todo y se la manda al docente.
+          </>,
+          <>
+            El docente revisa la decisión y da el <strong className="text-zinc-100">visto bueno</strong>;
+            cuando corre la simulación llegan los reportes del año y el ciclo vuelve a empezar.
+          </>,
+        ]}
+      />
+
+      <Subtitulo>Puntos de desempeño</Subtitulo>
+      <Lista
+        items={[
+          <>
+            Cada gerente empieza con <Chip color="zinc">0 puntos</Chip>.
+          </>,
+          <>
+            Si su área envió borrador gana <Chip color="emerald">+5</Chip>; si quedó{' '}
+            <strong className="text-zinc-100">sin trabajar</strong> pierde <Chip color="pink">−10</Chip>.
+          </>,
+          <>
+            Con <Chip color="pink">−20 o menos</Chip>, el comité puede{' '}
+            <strong className="text-zinc-100">penalizarlo</strong>: el grupo elige la sanción (amonestación
+            escrita, restar los puntos que decida o expulsarlo de la empresa) y el motivo queda registrado para
+            el docente.
+          </>,
+        ]}
+      />
+      <Tip>
+        Repartan las áreas al inicio, acuerden plazos internos y revisen el comité antes del envío final: un año
+        con áreas “sin trabajar” juega con valores viejos y además golpea el desempeño del equipo.
+      </Tip>
     </div>
   )
 }
@@ -344,18 +441,20 @@ function CapDecisiones() {
       <Lista
         items={[
           <>
-            <strong className="text-zinc-100">Borrador</strong>: guarda todas las veces que quieras, no tiene
-            efecto hasta enviar.
+            <strong className="text-zinc-100">Borrador del área</strong>: cada área envía su borrador al comité
+            (visible para todos). Puede actualizarse cuantas veces quieran antes del envío final.
           </>,
           <>
-            <strong className="text-zinc-100">Enviar</strong>: bloquea tu decisión del año (estado{' '}
-            <Chip color="emerald">enviada</Chip>). Ya no se puede cambiar.
+            <strong className="text-zinc-100">Enviar decisión del año</strong>: el comité consolida los 5
+            borradores y la manda al docente (estado <Chip color="emerald">enviada</Chip>). Ya no se puede
+            cambiar hasta el próximo año.
           </>,
           <>
-            Si tu equipo <strong className="text-zinc-100">no envía</strong>, el profesor procesa igual usando
-            los valores actuales de tus marcas y tu reporte queda marcado &ldquo;sin decisión&rdquo;.
+            Si el comité <strong className="text-zinc-100">no envía</strong> y el docente corre el año, la
+            empresa juega con los valores vigentes y sus gerentes quedan <Chip color="pink">sin trabajar</Chip>{' '}
+            (−10 puntos de desempeño cada uno).
           </>,
-          'El costo de los estudios que marcaste se cobra al enviar (aunque después ya no puedas editar).',
+          'El costo de los estudios que marcó el área de I+D se cobra al enviar la decisión del año.',
         ]}
       />
     </div>
@@ -524,11 +623,12 @@ function CapReportes() {
   return (
     <div>
       <Titulo>📊 Reportes y ranking</Titulo>
-      <Subtitulo>Año 0 · diagnóstico inicial</Subtitulo>
+      <Subtitulo>Año 0 · reporte general con la historia del mercado</Subtitulo>
       <Parrafo>
-        El Año 0 no se decide: es tu punto de partida. Muestra las participaciones iniciales de cada firma
-        (normalizadas a 100% del mercado), producción = ventas, inventario cero y un costo de transferencia del
-        55% del precio. Úsalo para entender dónde estás parado antes de la primera decisión.
+        El Año 0 no se decide: es el <strong className="text-zinc-100">reporte general</strong> que muestra los
+        <strong className="text-zinc-100"> 3 años anteriores</strong> a su gestión: las ventas totales del
+        mercado, la participación de cada empresa y la contribución de la suya en cada año histórico. Úsenlo
+        para entender el tamaño del mercado y su punto de partida antes de la primera decisión.
       </Parrafo>
       <Subtitulo>Después de cada ronda</Subtitulo>
       <Tabla
@@ -657,24 +757,104 @@ function CapConsejos() {
             las ventas. Vender mucho con márgenes mínimos no te hace campeón.
           </>,
           <>
-            <strong className="text-zinc-100">Si no envías, decides igual</strong>: el profesor procesa con tus
-            valores actuales. Nunca dejes la ronda pasar por accidente.
+            <strong className="text-zinc-100">Trabajen el comité</strong>: si un área queda "sin trabajar", la
+            empresa decide con valores viejos y sus gerentes pierden puntos. Revisen los borradores antes del
+            envío final.
           </>,
         ]}
       />
       <div className="mt-6 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 to-pink-500/10 p-4 text-center">
         <p className="text-sm font-black uppercase tracking-widest text-amber-300">🥇 ¡Buena suerte, equipo!</p>
         <p className="mt-1 text-xs text-zinc-400">
-          El mercado perdona poco y premia la estrategia. Nos vemos en el Año 10.
+          El mercado perdona poco y premia la estrategia. Nos vemos en el podio del último año.
         </p>
       </div>
     </div>
   )
 }
 
+
+// ---------- Capítulo: Bolivia ----------
+
+function CapBolivia() {
+  return (
+    <div>
+      <h3 className="mb-1 text-lg font-black text-zinc-100">🇧🇴 El mercado de Bolivia</h3>
+      <p className="mb-4 text-sm text-zinc-400">
+        El simulador replica el mercado boliviano de helados con datos oficiales del INE y del BCB,
+        más hipótesis de juego claramente marcadas. Moneda: Boliviano (Bs). Volumen: miles de litros.
+      </p>
+
+      <h4 className="mb-2 text-sm font-black uppercase tracking-wide text-amber-300">Población y mercado (Censo 2024, INE)</h4>
+      <Tabla
+        encabezados={['Concepto', 'Valor']}
+        filas={[
+          ['Población total', '11.365.333 (oficial)'],
+          ['Consumo per cápita simulado', '1,4 litros/año (referencia débil, editable)'],
+          ['Mercado total del Año 0', '≈ 15,91 millones de litros'],
+          ['Oferta de las 5 empresas', '3,5 millones de litros (22% del mercado)'],
+          ['Resto del mercado', '≈ 78%: heladerías artesanales, informal, importados (no juega, pero cede o gana terreno)'],
+        ]}
+      />
+
+      <h4 className="mb-2 mt-5 text-sm font-black uppercase tracking-wide text-amber-300">9 departamentos, 5 segmentos, 3 canales</h4>
+      <p className="mb-3 text-sm leading-relaxed text-zinc-300">
+        La demanda se reparte entre los 9 departamentos según población (Censo 2024) y poder adquisitivo, con
+        estacionalidad por zona: el altiplano (La Paz, Oruro, Potosí) amplifica los meses cálidos, los llanos
+        (Santa Cruz, Beni, Pando) la suavizan. Los 5 segmentos son Familias (30%), Jóvenes (25%), Niños (20%),
+        Premium (15%) y Saludables (10%). Los canales: Tradicional (45%, margen 20%), Supermercados (35%, 25%)
+        y HORECA y Eventos (20%, 30%) — matrimonios, quinceañeras, graduaciones y ferias mueven este canal.
+      </p>
+
+      <h4 className="mb-2 mt-5 text-sm font-black uppercase tracking-wide text-amber-300">Eventos de Bolivia (doc §10)</h4>
+      <p className="mb-3 text-sm leading-relaxed text-zinc-300">
+        Los eventos ocurren <b>dentro de tu simulación</b> y se organizan <b>por años</b>: el docente puede fijar un
+        evento para un año determinado (por ejemplo, «Bloqueo de carreteras» en el Año 3 o «Navidad» en el Año 5).
+        Cada año tiene <b>de 1 a 3 eventos</b> y <b>nunca dos de la misma categoría</b> (festivo, social, económico,
+        logístico o climático), así que ningún año se repite. Los años que el docente no planifica se autocompletan
+        con semilla registrada. Los efectos se agrupan por variable, región y mes (pesos 100/50/25) y tocan de verdad
+        los cálculos: demanda, costos, logística e inventarios. Antes de cada ronda el docente ve la vista previa del
+        año y puede desactivar o ajustar eventos.
+      </p>
+
+      <h4 className="mb-2 mt-5 text-sm font-black uppercase tracking-wide text-amber-300">Inflación y tipo de cambio (doc §18)</h4>
+      <Formula>πₜ = clamp(πₜ₋₁ + Δescenario + Σ factores, 0%, 30%)</Formula>
+      <p className="mb-3 text-sm leading-relaxed text-zinc-300">
+        El Año 0 parte de la inflación interanual oficial de septiembre de 2026: 5,70% (INE). Desde el Año 1 el
+        escenario (favorable 25%, estable 50%, desfavorable 25%) y factores como combustibles, dólar, leche,
+        bloqueos o clima mueven la inflación, con traspaso del 20% de los efectos de eventos. La parte importada
+        de cada insumo sigue al tipo de cambio (Bs 11,8/US$ en el Año 0, régimen flexible desde junio de 2026):
+        si subes tu precio igual que la inflación, tu precio real no cambia; si subes más, pierdes
+        competitividad.
+      </p>
+
+      <h4 className="mb-2 mt-5 text-sm font-black uppercase tracking-wide text-amber-300">Impuestos y finanzas</h4>
+      <Tabla
+        encabezados={['Concepto', 'Valor']}
+        filas={[
+          ['IVA', '13% incluido en el precio; las ventas se calculan netas'],
+          ['IT', '3% sobre ingresos'],
+          ['IUE', '25% sobre la utilidad'],
+          ['Tasa de interés', '12% anual (referencia BCB, editable por escenario)'],
+          ['Endeudamiento máximo', '60% de las ventas'],
+          ['Presupuesto comercial máximo', '20% de las ventas (publicidad + promoción + investigación + comisión)'],
+        ]}
+      />
+
+      <Tip>
+        Vigila la inflación y el dólar: tus costos de envases y frutas importadas suben con el tipo de cambio, y
+        la leche con la escasez. Un precio que no sube con los costos destruye tu margen; uno que sube demasiado
+        te quita demanda real.
+      </Tip>
+    </div>
+  )
+}
+
 const CONTENIDOS: Record<string, () => React.ReactNode> = {
   bienvenida: CapBienvenida,
+  comite: CapComite,
   mercado: CapMercado,
+  bolivia: CapBolivia,
   decisiones: CapDecisiones,
   id: CapID,
   estudios: CapEstudios,

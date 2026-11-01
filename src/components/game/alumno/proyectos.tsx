@@ -111,6 +111,8 @@ export function AlumnoProyectos({
   refresh: () => Promise<void> | void
 }) {
   const cfg = estado.config.id
+  // Corrección: SOLO el Gerente de Investigación y Desarrollo registra proyectos
+  const esInvestigacion = estado.membresia?.cargo === 'investigacion'
   const [nombre, setNombre] = useState('')
   const [atributos, setAtributos] = useState<number[]>([5, 5, 5, 5, 5, 5])
   const [presupuesto, setPresupuesto] = useState(cfg.presupuestoMin + 200)
@@ -180,7 +182,8 @@ export function AlumnoProyectos({
         </div>
       )}
 
-      {/* Formulario de registro */}
+      {/* Formulario de registro (solo el Gerente de I+D) */}
+      {esInvestigacion ? (
       <section
         aria-label="Registrar proyecto"
         className="rounded-2xl border-2 border-purple-400/40 bg-purple-400/5 p-4 sm:p-6"
@@ -310,6 +313,15 @@ export function AlumnoProyectos({
           <li>· Los aprobados se aplican al año siguiente en Decisiones</li>
         </ul>
       </section>
+      ) : (
+        <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-center">
+          <p className="text-2xl" aria-hidden="true">🔒</p>
+          <p className="mt-1 text-xs font-bold text-amber-200">Solo el Gerente de Investigación y Desarrollo registra proyectos</p>
+          <p className="mt-0.5 text-[11px] text-zinc-400">
+            Los proyectos del equipo se revisan en el <b>Comité</b>; si uno se aprueba, el área de Investigación puede lanzar la marca nueva.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

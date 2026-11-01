@@ -1,9 +1,14 @@
-// Bootstrap del sistema: usuarios demo + industria inicial (idempotente)
+// Bootstrap del sistema — VERSIÓN LIMPIA (idempotente)
+// El sistema arranca con UNA sola cuenta: el Administrador (Rectorado).
+// El docente se registra después desde el panel del Rectorado y cada
+// profesor crea sus propias simulaciones con sus alumnos. El catálogo de
+// eventos de Bolivia (doc §10) se siembra porque el plan de eventos del
+// docente lo necesita desde el primer momento.
 import { db } from '@/lib/db'
 import { hashPassword } from './auth'
-import { crearIndustria } from './simulacion'
+import { sembrarCatalogoEventos } from './simulacion'
 
-const DEMO_PASSWORD = '321'
+const CLAVE_INICIAL_ADMIN = '321'
 
 let seedPromise: Promise<void> | null = null
 
@@ -16,25 +21,11 @@ async function ejecutarSeed(): Promise<void> {
   const admin = await db.usuario.findUnique({ where: { nombre: 'Admin' } })
   if (admin) return // ya inicializado
 
-  const passHash = hashPassword(DEMO_PASSWORD)
+  // 1) Única cuenta inicial: Administrador (Rectorado), clave 321
+  await db.usuario.create({
+    data: { nombre: 'Admin', passwordHash: hashPassword(CLAVE_INICIAL_ADMIN), rol: 'DECANO' },
+  })
 
-  await db.usuario.create({ data: { nombre: 'Admin', passwordHash: passHash, rol: 'DECANO' } })
-  const profe = await db.usuario.create({ data: { nombre: 'profe', passwordHash: passHash, rol: 'PROFESOR' } })
-
-  const alumnos = ['colibri', 'kallpa', 'inti', 'pachamama']
-  const usuariosAlumno: { id: string; nombre: string }[] = []
-  for (const a of alumnos) {
-    usuariosAlumno.push(await db.usuario.create({ data: { nombre: a, passwordHash: passHash, rol: 'ALUMNO' } }))
-  }
-
-  const industria = await crearIndustria(
-    'Helados Markestrat Bolivia',
-    profe.id,
-    ['Colibrí', 'Kallpa', 'Inti', 'Pachamama']
-  )
-
-  const equipos = await db.equipo.findMany({ where: { industriaId: industria.id }, orderBy: { createdAt: 'asc' } })
-  for (let i = 0; i < Math.min(equipos.length, usuariosAlumno.length); i++) {
-    await db.equipo.update({ where: { id: equipos[i].id }, data: { alumnoId: usuariosAlumno[i].id } })
-  }
+  // 2) Catálogo de eventos de Bolivia (doc §10) disponible desde el inicio
+  await sembrarCatalogoEventos()
 }

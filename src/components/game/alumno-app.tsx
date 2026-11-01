@@ -2,14 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BarChart3, FlaskConical, Microscope, SlidersHorizontal, Trophy } from 'lucide-react'
+import { BarChart3, Briefcase, CalendarDays, FlaskConical, Microscope, SlidersHorizontal, Trophy, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Hud } from '@/components/game/hud'
 import { SplashCarga } from '@/components/game/login-screen'
 import { AlumnoDecisiones } from '@/components/game/alumno/decisiones'
+import { PanelMiArea } from '@/components/game/alumno/mi-area'
+import { AlumnoComite } from '@/components/game/alumno/comite'
 import { AlumnoEstudios } from '@/components/game/alumno/estudios'
 import { AlumnoProyectos } from '@/components/game/alumno/proyectos'
 import { AlumnoReportes } from '@/components/game/alumno/reportes'
+import { AlumnoEventos } from '@/components/game/alumno/eventos-alumno'
 import { AlumnoRanking } from '@/components/game/alumno/ranking'
 import { api, type AlumnoEstado, type UsuarioSesion } from '@/lib/pacha/api-client'
 
@@ -24,7 +27,7 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
   const [estado, setEstado] = useState<AlumnoEstado | null>(null)
   const [cargando, setCargando] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState('decisiones')
+  const [tab, setTab] = useState('mi-area')
 
   const refresh = useCallback(async () => {
     try {
@@ -80,17 +83,49 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
     filaPropia?.posicion === 1 ? '🥇' : filaPropia?.posicion === 2 ? '🥈' : filaPropia?.posicion === 3 ? '🥉' : ''
   const proyectosActivos = estado.proyectos.filter((p) => p.estado === 'EN_DESARROLLO').length
   const finalizada = industria.estado === 'FINALIZADA'
+  const decisionBloqueada = estado.decision?.estado === 'ENVIADA' || estado.decision?.estado === 'APROBADA'
+  const areasSinEnviar = decisionBloqueada ? 0 : estado.cargos.filter((c) => !estado.borradores.some((b) => b.cargo === c.id)).length
+  const miCargo = estado.cargos.find((c) => c.id === estado.membresia?.cargo)
+  const esInvestigacion = estado.membresia?.cargo === 'investigacion'
+  const miAreaSinEnviar = !decisionBloqueada && miCargo && !estado.borradores.some((b) => b.cargo === miCargo.id)
+  const eventosAnioActual = estado.eventos.filter((e) => e.anio === industria.anioActual)
 
   const tabs = [
-    { id: 'decisiones', nombre: 'Decisiones', icono: <SlidersHorizontal className="h-4 w-4" aria-hidden="true" /> },
-    { id: 'estudios', nombre: 'Estudios', icono: <Microscope className="h-4 w-4" aria-hidden="true" /> },
     {
-      id: 'proyectos',
-      nombre: 'I+D',
-      icono: <FlaskConical className="h-4 w-4" aria-hidden="true" />,
-      badge: proyectosActivos,
+      id: 'mi-area',
+      nombre: `Mi área${miCargo ? ` · ${miCargo.corto}` : ''}`,
+      icono: <Briefcase className="h-4 w-4" aria-hidden="true" />,
+      badge: miAreaSinEnviar ? 1 : undefined,
     },
-    { id: 'reportes', nombre: 'Reportes', icono: <BarChart3 className="h-4 w-4" aria-hidden="true" /> },
+    {
+      id: 'decisiones',
+      nombre: 'Decisiones',
+      icono: <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />,
+      badge: areasSinEnviar > 0 ? areasSinEnviar : undefined,
+    },
+    {
+      id: 'comite',
+      nombre: 'Comité',
+      icono: <Users className="h-4 w-4" aria-hidden="true" />,
+    },
+    {
+      id: 'eventos',
+      nombre: 'Eventos',
+      icono: <CalendarDays className="h-4 w-4" aria-hidden="true" />,
+      badge: eventosAnioActual.length > 0 ? eventosAnioActual.length : undefined,
+    },
+    ...(esInvestigacion
+      ? [
+          { id: 'estudios', nombre: 'Estudios', icono: <Microscope className="h-4 w-4" aria-hidden="true" /> },
+          {
+            id: 'proyectos',
+            nombre: 'I+D',
+            icono: <FlaskConical className="h-4 w-4" aria-hidden="true" />,
+            badge: proyectosActivos,
+          },
+        ]
+      : []),
+    { id: 'reportes', nombre: 'Reportes generales', icono: <BarChart3 className="h-4 w-4" aria-hidden="true" /> },
     { id: 'ranking', nombre: 'Ranking', icono: <Trophy className="h-4 w-4" aria-hidden="true" /> },
   ]
 
@@ -98,7 +133,7 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
     <div className="pacha-bg flex min-h-screen flex-col text-zinc-100">
       <Hud
         titulo={equipo.nombre}
-        subtitulo={industria.nombre}
+        subtitulo={`${industria.nombre} · ${miCargo ? `${miCargo.emoji} ${miCargo.nombre}` : 'Gerente'}`}
         anioActual={industria.anioActual}
         anioMaximo={industria.anioMaximo}
         estadoIndustria={industria.estado}
@@ -146,9 +181,12 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.25, ease: 'easeOut' }}
         >
+          {tab === 'mi-area' && <PanelMiArea estado={estado} refresh={refresh} />}
           {tab === 'decisiones' && <AlumnoDecisiones estado={estado} refresh={refresh} />}
-          {tab === 'estudios' && <AlumnoEstudios estado={estado} />}
-          {tab === 'proyectos' && <AlumnoProyectos estado={estado} refresh={refresh} />}
+          {tab === 'comite' && <AlumnoComite estado={estado} refresh={refresh} />}
+          {tab === 'eventos' && <AlumnoEventos estado={estado} />}
+          {tab === 'estudios' && esInvestigacion && <AlumnoEstudios estado={estado} />}
+          {tab === 'proyectos' && esInvestigacion && <AlumnoProyectos estado={estado} refresh={refresh} />}
           {tab === 'reportes' && <AlumnoReportes estado={estado} />}
           {tab === 'ranking' && <AlumnoRanking estado={estado} />}
         </motion.div>

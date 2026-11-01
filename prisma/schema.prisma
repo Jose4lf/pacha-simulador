@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -16,39 +16,83 @@ model Usuario {
   rol          String // DECANO | PROFESOR | ALUMNO
   createdAt    DateTime @default(now())
 
-  equiposComoAlumno  Equipo[]   @relation("AlumnoEquipos")
-  industriasProfesor Industria[]
+  industriasProfesor  Industria[]
+  membresias          Membresia[]
+  borradoresEnviados  BorradorArea[]  @relation("BorradorEnviadoPor")
+  penalizaciones      Penalizacion[]  @relation("PenalizacionRecibida")
+  sancionesRegistradas Penalizacion[] @relation("PenalizacionRegistradaPor")
 }
 
 // ===================== SIMULACION =====================
 
 model Industria {
-  id         String   @id @default(cuid())
-  nombre     String
-  anioActual Int      @default(0)
-  anioMaximo Int      @default(10)
-  estado     String   @default("ACTIVA") // ACTIVA | FINALIZADA
-  profesorId String
-  profesor   Usuario  @relation(fields: [profesorId], references: [id])
-  equipos    Equipo[]
-  createdAt  DateTime @default(now())
+  id             String   @id @default(cuid())
+  nombre         String
+  anioActual     Int      @default(1)
+  anioMaximo     Int      @default(8)
+  estado         String   @default("ACTIVA") // ACTIVA | FINALIZADA
+  profesorId     String
+  profesor       Usuario  @relation(fields: [profesorId], references: [id])
+  equipos        Equipo[]
+  configJson     String? // ConfigIndustria de Bolivia congelada al crear (editable por el docente)
+  semillaEventos String? // semilla base del sorteo de eventos (doc §18.4)
+  createdAt      DateTime @default(now())
+
+  macroPeriodos MacroPeriodo[]
+  eventosPeriodo EventoPeriodo[]
+  eventosPlan   EventoPlan[]
 }
 
+// Una empresa del mercado, gestionada por un Comité de Dirección de Marketing
 model Equipo {
-  id          String   @id @default(cuid())
-  nombre      String
-  color       String   @default("#f472b6")
-  createdAt   DateTime @default(now())
-  industriaId String
-  industria   Industria @relation(fields: [industriaId], references: [id])
-  alumnoId    String?  @unique
-  alumno      Usuario? @relation("AlumnoEquipos", fields: [alumnoId], references: [id])
+  id              String    @id @default(cuid())
+  nombre          String
+  color           String    @default("#f472b6")
+  createdAt       DateTime  @default(now())
+  industriaId     String
+  industria       Industria @relation(fields: [industriaId], references: [id])
+  coberturaJson   String? // cobertura geográfica por región 1..10 (doc §8)
+  capacidadInstalada Float  @default(1000) // miles de litros (doc §5: 1.000.000 L)
+  capacidadMaxima    Float  @default(3000) // miles de litros
+  deuda           Float     @default(0) // miles Bs
+  efectivo        Float     @default(0) // miles Bs
 
   marcas     Marca[]
   decisiones Decision[]
   estudios   CompraEstudio[]
   proyectos  ProyectoID[]
   reportes   Reporte[]
+  membresias Membresia[]
+  borradores BorradorArea[]
+  penalizaciones Penalizacion[]
+  permisosArea   PermisoArea[]
+}
+
+// Un gerente (alumno) dentro de la empresa, con su cargo y puntos de desempeño
+model Membresia {
+  id        String   @id @default(cuid())
+  equipoId  String
+  equipo    Equipo   @relation(fields: [equipoId], references: [id])
+  usuarioId String
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id])
+  cargo     String // precios | publicidad | produccion | ventas | investigacion
+  puntos    Float    @default(0) // puntos de desempeño
+  createdAt DateTime @default(now())
+
+  @@unique([equipoId, usuarioId])
+}
+
+// Permiso de un área del comité: el gerente responsable «abre» su área al resto
+// del equipo. Por defecto cada área está bloqueada (solo su encargado edita).
+model PermisoArea {
+  id            String   @id @default(cuid())
+  equipoId      String
+  equipo        Equipo   @relation(fields: [equipoId], references: [id])
+  cargo         String // precios | publicidad | produccion | ventas | investigacion
+  abierto       Boolean  @default(false)
+  actualizadoAt DateTime @updatedAt
+
+  @@unique([equipoId, cargo])
 }
 
 model Marca {
@@ -73,11 +117,28 @@ model Decision {
   equipoId  String
   equipo    Equipo   @relation(fields: [equipoId], references: [id])
   anio      Int
-  estado    String   @default("BORRADOR") // BORRADOR | ENVIADA
-  contenido String // JSON
+  estado    String   @default("BORRADOR") // BORRADOR | ENVIADA | APROBADA (visto bueno del docente)
+  contenido String // JSON DecisionContenido (consolidado de los borradores de área)
   createdAt DateTime @default(now())
 
   @@unique([equipoId, anio])
+}
+
+// Borrador anual de UNA área del comité; existir con enviado=true = área trabajada
+model BorradorArea {
+  id           String    @id @default(cuid())
+  equipoId     String
+  equipo       Equipo    @relation(fields: [equipoId], references: [id])
+  anio         Int
+  cargo        String // precios | publicidad | produccion | ventas | investigacion
+  contenido    String // JSON con las decisiones del área
+  enviado      Boolean   @default(true)
+  enviadoPorId String?
+  enviadoPor   Usuario?  @relation("BorradorEnviadoPor", fields: [enviadoPorId], references: [id])
+  enviadoAt    DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([equipoId, anio, cargo])
 }
 
 model CompraEstudio {
@@ -106,22 +167,124 @@ model ProyectoID {
   @@unique([equipoId, nombre])
 }
 
-// ===================== REPORTES =====================
+// Sanción aplicada por el comité a un gerente con desempeño muy negativo
+model Penalizacion {
+  id              String   @id @default(cuid())
+  equipoId        String
+  equipo          Equipo   @relation(fields: [equipoId], references: [id])
+  usuarioId       String
+  usuario         Usuario  @relation("PenalizacionRecibida", fields: [usuarioId], references: [id])
+  tipo            String // AMONESTACION | PUNTOS | EXPULSION
+  puntos          Float    @default(0) // puntos restados (0 en amonestación)
+  motivo          String   @default("")
+  anio            Int
+  registradaPorId String
+  registradaPor   Usuario  @relation("PenalizacionRegistradaPor", fields: [registradaPorId], references: [id])
+  createdAt       DateTime @default(now())
+}
+
+// ===================== ENTORNO DE BOLIVIA: EVENTOS E INFLACIÓN =====================
+
+// Catálogo editable por el DECANO (panel administrativo, doc §16)
+model EventoCatalogo {
+  id              String  @id @default(cuid())
+  nombre          String
+  categoria       String // FESTIVO | SOCIAL | ECONOMICO | LOGISTICO | CLIMATICO
+  region          String @default("NACIONAL") // NACIONAL o id de departamento
+  regla           String // 'MM-DD' · 'PASCUA-n' · 'AGR-MM' · 'EDU-INVERNAL' · 'PROB'
+  mesesDuracion   Int     @default(1) // 1..3 meses (doc §11)
+  intensidad      Float   @default(0.5) // 0..1
+  probabilidad    Float   @default(1) // 1 = programado · <1 extraordinario
+  efectoDemanda   Float   @default(0) // -0.20..0.25 (topes doc §11)
+  efectoCosto     Float   @default(0) // -0.10..0.30
+  efectoLogistica Float   @default(0) // 0..0.5 reducción de disponibilidad
+  canal           String? // 'horeca' para eventos sociales
+  activo          Boolean @default(true)
+  tipoDato        String  @default("hipotesis") // oficial | hipotesis
+  fuente          String  @default("")
+  createdAt       DateTime @default(now())
+
+  planes EventoPlan[]
+}
+
+// Eventos resueltos para UN periodo de UNA industria (vista previa → congelados al ejecutar)
+model EventoPeriodo {
+  id               String   @id @default(cuid())
+  industriaId      String
+  industria        Industria @relation(fields: [industriaId], references: [id])
+  anio             Int
+  nombre           String
+  categoria        String
+  region           String
+  mesesJson        String // JSON [1..12]
+  efectoDemanda    Float
+  efectoCosto      Float
+  efectoLogistica  Float
+  canal            String?
+  origen           String @default("CALENDARIO") // CALENDARIO | PROBABILISTICO | MANUAL
+  activo           Boolean @default(true) // desactivable por el docente antes de ejecutar
+  trazabilidadJson String  @default("")
+
+  @@index([industriaId, anio])
+}
+
+// PLAN de eventos por simulación y año (corrección del docente): los eventos
+// ocurren dentro de cada simulación, por años; 1 a 3 eventos por año y nunca
+// dos de la misma categoría en el mismo año (validado en la API).
+model EventoPlan {
+  id          String    @id @default(cuid())
+  industriaId String
+  industria   Industria @relation(fields: [industriaId], references: [id])
+  anio        Int // año de simulación 1..anioMaximo
+  catalogoId  String // referencia a EventoCatalogo
+  evento      EventoCatalogo @relation(fields: [catalogoId], references: [id])
+  origen      String    @default("DOCENTE") // DOCENTE | AUTO (autocompletar)
+  createdAt   DateTime  @default(now())
+
+  @@unique([industriaId, anio, catalogoId])
+  @@index([industriaId, anio])
+}
+
+// Variables macroeconómicas fijadas ANTES de ejecutar cada periodo (doc §18.10)
+model MacroPeriodo {
+  id                 String    @id @default(cuid())
+  industriaId        String
+  industria          Industria @relation(fields: [industriaId], references: [id])
+  anio               Int
+  escenario          String    @default("ESTABLE") // FAVORABLE | ESTABLE | DESFAVORABLE
+  escenarioOrigen    String    @default("SORTEADO") // SORTEADO | FIJADO_DOCENTE
+  semilla            String    @default("")
+  deltaEscenario     Float     @default(0)
+  inflacionAnual     Float     @default(0.057)
+  factoresJson       String    @default("[]") // aportes auditables de los factores
+  inflacionMensualJson String  @default("[]") // 12 tasas mensuales
+  indicePreciosInicio Float    @default(100)
+  indicePreciosFin   Float     @default(100)
+  tipoCambioInicio   Float     @default(11.8)
+  tipoCambioFinal    Float     @default(11.8)
+  tasaInteres        Float     @default(0.12)
+  ejecutado          Boolean   @default(false) // inmutable una vez ejecutado (doc §18.12 regla 8)
+  preparadoAt        DateTime  @default(now())
+  ejecutadoAt        DateTime?
+
+  @@unique([industriaId, anio])
+}
 
 model Reporte {
   id                   String  @id @default(cuid())
   equipoId             String
   equipo               Equipo  @relation(fields: [equipoId], references: [id])
   anio                 Int
-  ventas               Float   @default(0) // miles unidades
-  ingresos             Float   @default(0) // miles Bs
-  costos               Float   @default(0) // costo de productos + inventario
+  ventas               Float   @default(0) // miles de litros
+  ingresos             Float   @default(0) // miles Bs netos de IVA
+  costos               Float   @default(0) // costo de productos + inventario + logística
   publicidad           Float   @default(0)
   fuerzaVentas         Float   @default(0)
   investigacionMercado Float   @default(0)
   contribucion         Float   @default(0)
-  participacion        Float   @default(0) // % de ventas del mercado
+  participacion        Float   @default(0) // % sobre el mercado de las empresas jugables
   sinDecision          Boolean @default(false)
+  detalleJson          String? // mensual, regional, financieros (IT/IUE/intereses), eventos, inflación
 
   marcas ReporteMarca[]
 

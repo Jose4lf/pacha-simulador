@@ -1,0 +1,13 @@
+node_modules
+.next
+db/pgdata-dev
+db/custom.db
+db/custom.db.respaldo-sqlite
+*.log
+dev.log
+server.log
+logs-dev-db.log
+.env
+docs
+upload
+download

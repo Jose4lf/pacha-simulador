@@ -198,3 +198,414 @@
   color: transparent;
   animation: pacha-shine 6s linear infinite;
 }
+
+/* ===================== TEMA "TINTA" · cuaderno pastel =====================
+   Se activa con data-theme="tinta" en <html> (componente selector-tema.tsx).
+   Paleta:
+     · Ciruela oscuro   #514653  → texto principal (redefine zinc-*)
+     · Lila / lavanda   #C9B6E4  → botones activos y acentos (redefine pink-*)
+     · Rosa pastel      #F6C6D0  → salir / acciones suaves (redefine rose-*)
+     · Celeste pastel   #B9DDF4  → bordes y acentos
+     · Verde menta               → estados de éxito (redefine emerald/teal-*)
+     · Amarillo pálido           → resaltado de filas (redefine amber/yellow-*)
+     · Vino / magenta   #8B1C4E  → cabeceras de tablas (redefine red-*)
+     · Fondo            #F6F2FA  → lila muy pálido / blanco roto (redefine white/black)
+   Tipografía: Amatic SC (títulos) + Patrick Hand (cuerpo), autoalojadas.
+   Tailwind v4 emite los colores como var(--color-*), así que redefinir estas
+   variables re-veste todas las utilidades (bg/text/border/ring/gradient). */
+
+@font-face {
+  font-family: 'Amatic SC';
+  src: url('/fonts/amatic-400.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Amatic SC';
+  src: url('/fonts/amatic-700.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Dancing Script';
+  src: url('/fonts/dancing-400.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Dancing Script';
+  src: url('/fonts/dancing-700.ttf') format('truetype');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Patrick Hand';
+  src: url('/fonts/patrick-400.ttf') format('truetype');
+  font-weight: 400;
+  font-display: swap;
+}
+
+html[data-theme='tinta'] {
+  /* Fondo y superficies */
+  --color-white: #fffdfb;      /* blanco roto */
+  --color-black: #514653;      /* traseros de diálogos teñidos de ciruela */
+  --destructive: #8b1c4e;      /* vino: botones destructivos legibles con texto blanco */
+  /* Fondo del documento (body usa bg-background): cuaderno pálido, nunca oscuro */
+  --background: #f6f2fa;
+  --foreground: #514653;
+  /* Texto principal (ciruela oscuro en escala zinc) */
+  --color-zinc-50: #3f3646;   /* el zinc más claro en noche = el texto más fuerte en tinta */
+  --color-zinc-100: #514653;
+  --color-zinc-200: #5a4f5e;
+  --color-zinc-300: #6b6070;
+  --color-zinc-400: #6e6376;   /* densificado: era ilegible sobre claro */
+  --color-zinc-500: #6f6478;   /* densificado (contraste 5.5:1) */
+  --color-zinc-600: #7d7284;   /* densificado (contraste 4.5:1) */
+  --color-zinc-700: #b0a5b2;
+  --color-zinc-800: #cfc6d2;
+  --color-zinc-900: #e9e3ec;
+  /* Lila / lavanda (acento principal: antes pink-*) */
+  --color-pink-50: #f3edfa;
+  --color-pink-100: #e9def6;
+  --color-pink-200: #dccdf0;
+  --color-pink-300: #74589f;   /* lila denso: cifras clave legibles (5.7:1) */
+  --color-pink-400: #7a5fb0;   /* densificado: etiqueta PACHA e iconos (5:1) */
+  --color-pink-500: #a187d6;
+  --color-pink-600: #8a6fbf;
+  --color-pink-700: #755ba6;
+  --color-pink-800: #5f4a88;
+  --color-pink-900: #4a3a6b;
+  /* Amarillo pálido (resaltados: antes amber/yellow-*) */
+  --color-amber-50: #fdf8e3;
+  --color-amber-100: #faf0c8;
+  --color-amber-200: #8a6c33;  /* dorado denso: títulos de segmentos (4.8:1) */
+  --color-amber-300: #8f6b2b;  /* dorado denso: dinero legible (4.8:1) */
+  --color-amber-400: #9a742a;  /* densificado: iconos de advertencia (4.2:1) */
+  --color-amber-500: #a8782a;
+  --color-amber-600: #a8853c;
+  --color-amber-700: #8a6c33;
+  --color-amber-800: #6d552c;
+  --color-amber-900: #544325;
+  --color-yellow-200: #fdf3c4;
+  --color-yellow-300: #f7e6a0;
+  --color-yellow-400: #eccf6d;
+  /* Verde menta (éxito: antes emerald/teal-*) */
+  --color-emerald-50: #eefaf3;
+  --color-emerald-100: #d9f4e5;
+  --color-emerald-200: #2c8058; /* menta denso: banners de éxito legibles */
+  --color-emerald-300: #2e8a61; /* menta denso: éxito legible (4.2:1) */
+  --color-emerald-400: #2c8058; /* densificado: iconos y costos (4.8:1) */
+  --color-emerald-500: #4fb382;
+  --color-emerald-600: #3f9469;
+  --color-emerald-700: #357956;
+  --color-teal-200: #8ccbb0;
+  --color-teal-300: #357a68;   /* densificado: títulos de canales (5:1) */
+  --color-teal-400: #3d8270;
+  --color-teal-500: #5db297;
+  --color-teal-600: #4a937d;
+  /* Rosa pastel (salir / suaves: antes rose-*) y vino (errores/urgente: red-*) */
+  --color-rose-200: #f6c6d0;
+  --color-rose-300: #f0b3c1;
+  --color-rose-400: #e89caa;
+  --color-red-50: #fbf0f3;
+  --color-red-100: #f8dce4;
+  --color-red-200: #b03f59;    /* vino medio: avisos legibles */
+  --color-red-300: #b03f59;    /* vino medio: negativos legibles (5.6:1) */
+  --color-red-400: #b44a63;
+  --color-red-500: #8b1c4e;
+  --color-red-600: #7a1845;
+  --color-red-700: #67143a;
+  /* Morados → lila denso (texto legible) */
+  --color-purple-50: #f3edfa;
+  --color-purple-100: #755ba6; /* densificado: zona de arrastre (5.5:1) */
+  --color-purple-200: #6d54a0; /* densificado: títulos de marcas (6:1) */
+  --color-purple-300: #6b539e; /* densificado: títulos y cifras (6.2:1) */
+  --color-purple-400: #7a5fb0; /* densificado: iconos y barras (5:1) */
+  --color-purple-500: #9d82d3;
+  --color-purple-600: #8468bd;
+  --color-purple-700: #6d54a0;
+  /* Celeste pastel (acento secundario) */
+  --color-sky-200: #d9edfa;
+  --color-sky-300: #b9ddf4;
+  --color-sky-400: #8fc7ec;
+  --color-sky-500: #6db0e0;
+  /* Naranjas → durazno denso (texto legible) */
+  --color-orange-200: #fbe4d0;
+  --color-orange-300: #b3702c; /* densificado: cifras de sensibilidad */
+  --color-orange-400: #eab37f;
+  --color-orange-500: #dd9a5b;
+}
+
+/* ---------- Tipografía manuscrita ---------- */
+html[data-theme='tinta'] body {
+  font-family: 'Patrick Hand', 'Comic Sans MS', cursive, sans-serif;
+  letter-spacing: 0.01em;
+}
+html[data-theme='tinta'] h1,
+html[data-theme='tinta'] h2,
+html[data-theme='tinta'] h3,
+html[data-theme='tinta'] h4 {
+  font-family: 'Amatic SC', 'Dancing Script', cursive;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  font-size: 1.25em;
+  line-height: 1.25;
+}
+html[data-theme='tinta'] input,
+html[data-theme='tinta'] textarea,
+html[data-theme='tinta'] select,
+html[data-theme='tinta'] table {
+  font-family: 'Patrick Hand', cursive, sans-serif;
+}
+
+/* ---------- Fondos y paneles ---------- */
+html[data-theme='tinta'] .pacha-bg {
+  background: #f6f2fa; /* lila muy pálido plano, sin degradados */
+}
+html[data-theme='tinta'] .pacha-panel {
+  border: 1px solid #b9ddf4;
+  background: rgba(255, 253, 251, 0.82);
+  box-shadow: 0 2px 10px rgba(81, 70, 83, 0.06);
+}
+/* Superficies oscuras fijas (HUD, tarjetas, tooltips).
+   Nota: se usan selectores de atributo [class*=...] porque el pipeline de CSS
+   de Turbopack descarta selectores de clase con "/" escapada (\.bg-white\/12). */
+html[data-theme='tinta'] [class*='bg-[#140f1c]/90'] {
+  background: rgba(250, 246, 252, 0.94) !important;
+  backdrop-blur: 8px;
+  border-color: #b9ddf4 !important; /* HUD arriba y pie sticky de decisiones */
+}
+html[data-theme='tinta'] .bg-\[\#1c1528\] {
+  background: #fffdfb;
+  border: 1px solid #b9ddf4;
+  color: #514653;
+}
+/* Selectores desplegables y cabeceras de tabla (bg-[#221a33] en tema noche) */
+html[data-theme='tinta'] .bg-\[\#221a33\] {
+  background: #fffdfb;
+  border: 1px solid #b9ddf4;
+  color: #514653;
+}
+/* Campos de formulario del login (bg-black/30 en tema noche) */
+html[data-theme='tinta'] [class*='bg-black/30'] {
+  background: rgba(81, 70, 83, 0.07) !important;
+}
+
+/* ---------- Contraste: texto claro sobre superficies claras ----------
+   En tema noche estos textos son blancos; sobre fondos pastel claros deben
+   volverse ciruela para seguir siendo legibles. */
+html[data-theme='tinta'] [class*='bg-white/12'][class*='text-white'],
+html[data-theme='tinta'] [class*='bg-white/10'][class*='text-white'] {
+  color: #514653; /* pestaña activa */
+}
+html[data-theme='tinta'] .from-pink-500.text-white {
+  color: #453b4c; /* CTA con gradiente lila → texto ciruela */
+}
+html[data-theme='tinta'] .from-purple-500.text-white {
+  color: #453b4c;
+}
+html[data-theme='tinta'] .from-amber-500.text-white {
+  color: #453b4c;
+}
+html[data-theme='tinta'] .from-emerald-500.text-white {
+  color: #453b4c; /* CTA menta → texto ciruela */
+}
+html[data-theme='tinta'] .bg-pink-500.text-white {
+  color: #453b4c; /* badge sólido lila */
+}
+/* spans internos de botones con gradiente */
+html[data-theme='tinta'] .from-pink-500 span.text-white,
+html[data-theme='tinta'] .from-purple-500 span.text-white,
+html[data-theme='tinta'] .from-amber-500 span.text-white,
+html[data-theme='tinta'] .from-emerald-500 span.text-white {
+  color: #453b4c;
+}
+
+/* ---------- Legibilidad ronda 2: superficies oscuras residuales ----------
+   bg-black/20 y bg-black/40 siguen pintando parches gris-pluma oscuros sobre
+   el cuaderno pastel; los bordes/anillos blancos quedan invisibles. */
+html[data-theme='tinta'] [class*='bg-black/20'] {
+  background: rgba(81, 70, 83, 0.045) !important;
+}
+html[data-theme='tinta'] [class*='bg-black/40'] {
+  background: rgba(81, 70, 83, 0.08) !important;
+}
+html[data-theme='tinta'] [class*='border-white/10'] {
+  border-color: rgba(81, 70, 83, 0.16) !important;
+}
+html[data-theme='tinta'] [class*='ring-white/'] {
+  --tw-ring-color: rgba(81, 70, 83, 0.18) !important;
+}
+
+/* Texto blanco heredado sobre .pacha-bg claro (login, manual, éxito) */
+html[data-theme='tinta'] .pacha-bg.text-white {
+  color: #514653 !important;
+}
+/* Palabras destacadas dentro de esos bloques (text-white propios) */
+html[data-theme='tinta'] .pacha-bg .text-white:not([class*='from-']) {
+  color: #514653 !important;
+}
+
+/* Pestañas del HUD: activa con base lila pálida; hovers visibles */
+html[data-theme='tinta'] [class*='bg-white/12'] {
+  background: #f3edfa !important;
+}
+html[data-theme='tinta'] [class*='hover:bg-white/5']:hover,
+html[data-theme='tinta'] [class*='hover:bg-white/10']:hover {
+  background: rgba(81, 70, 83, 0.08) !important;
+}
+
+/* Marca ✓ de casillas activadas (text-white sobre lila) */
+html[data-theme='tinta'] button[data-state='checked'] {
+  color: #453b4c !important;
+}
+/* Pestaña activa de reportes: gradiente translúcido claro → texto ciruela */
+html[data-theme='tinta'] [class*='from-pink-500/30'][class*='text-white'] {
+  color: #514653 !important;
+}
+
+/* ---------- Sin degradados: colores planos y suaves ----------
+   El modo cuaderno pastel usa tintas planas: se elimina todo
+   background-image degradado y se sustituye por un color sólido suave. */
+html[data-theme='tinta'] [class*='bg-gradient'] {
+  background-image: none !important;
+}
+/* Botones activos → lila plano (paleta: botones activos) */
+html[data-theme='tinta'] [class*='from-pink-500']:not([class*='from-pink-500/']),
+html[data-theme='tinta'] [class*='from-purple-500'],
+html[data-theme='tinta'] [class*='from-amber-500']:not([class*='from-amber-500/']) {
+  background-color: #c9b6e4 !important;
+}
+html[data-theme='tinta'] [class*='from-pink-500']:not([class*='from-pink-500/']):hover,
+html[data-theme='tinta'] [class*='from-purple-500']:hover,
+html[data-theme='tinta'] [class*='from-amber-500']:not([class*='from-amber-500/']):hover {
+  background-color: #bba3dc !important;
+}
+/* Botón de envío → verde menta plano suave */
+html[data-theme='tinta'] [class*='from-emerald-500'] {
+  background-color: #a9dfc0 !important;
+}
+html[data-theme='tinta'] [class*='from-emerald-500']:hover {
+  background-color: #94d4ae !important;
+}
+/* Variantes translúcidas → lavados planos */
+html[data-theme='tinta'] [class*='from-pink-500/25'],
+html[data-theme='tinta'] [class*='from-pink-500/30'] {
+  background-color: #e7ddf6 !important;
+}
+html[data-theme='tinta'] [class*='from-amber-500/10'] {
+  background-color: #fdf8e3 !important;
+}
+/* Barras de progreso planas */
+html[data-theme='tinta'] [data-slot='progress-indicator'] {
+  background-image: none !important;
+  background-color: #b39ede !important;
+}
+html[data-theme='tinta'] [role='progressbar'] > div {
+  background-image: none !important;
+  background-color: #b39ede !important;
+}
+html[data-theme='tinta'] [role='progressbar'] > div[class*='from-amber-400'] {
+  background-color: #e0c473 !important; /* año finalizado → dorado suave */
+}
+
+/* ---------- Elementos personalizados ---------- */
+html[data-theme='tinta'] .pacha-title-shine {
+  background: #8b1c4e; /* vino sólido, sin brillo animado */
+  background-size: auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: none;
+}
+html[data-theme='tinta'] .pacha-glow {
+  animation: pacha-glow-tinta 2.4s ease-in-out infinite;
+}
+@keyframes pacha-glow-tinta {
+  0%, 100% { box-shadow: 0 0 16px rgba(201, 182, 228, 0.55); }
+  50% { box-shadow: 0 0 30px rgba(201, 182, 228, 0.9); }
+}
+html[data-theme='tinta'] .pacha-scroll::-webkit-scrollbar-thumb {
+  background: rgba(179, 158, 222, 0.55);
+}
+html[data-theme='tinta'] .pacha-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(161, 135, 214, 0.8);
+}
+html[data-theme='tinta'] .pacha-scroll::-webkit-scrollbar-track {
+  background: rgba(81, 70, 83, 0.08);
+}
+
+/* Botón del selector de diseño */
+.pacha-btn-tema {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.25rem;
+  width: 2.25rem;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: #d4c5e8;
+  transition: transform 0.12s ease, background 0.15s ease, color 0.15s ease;
+}
+.pacha-btn-tema:hover {
+  background: rgba(201, 182, 228, 0.25);
+  color: #fff;
+  transform: rotate(-8deg) scale(1.06);
+}
+.pacha-btn-tema:active {
+  transform: scale(0.95);
+}
+html[data-theme='tinta'] .pacha-btn-tema {
+  border-color: #b9ddf4;
+  background: #f6c6d0;
+  color: #514653;
+  box-shadow: 0 1px 4px rgba(81, 70, 83, 0.12);
+}
+html[data-theme='tinta'] .pacha-btn-tema:hover {
+  background: #f0b3c1;
+  color: #514653;
+}
+
+/* ---------- Tablas: cabecera vino + filas resaltadas ---------- */
+html[data-theme='tinta'] [data-slot='table-head'] {
+  background: #8b1c4e;
+  color: #fffdfb;
+  font-weight: 700;
+  border-bottom: 2px solid #6d163e;
+}
+html[data-theme='tinta'] [data-slot='table-head'] > div,
+html[data-theme='tinta'] [data-slot='table-head'] > span,
+html[data-theme='tinta'] [data-slot='table-head'] > button {
+  color: #fffdfb;
+}
+html[data-theme='tinta'] [data-slot='table-row']:hover {
+  background: #fdf3cf;
+}
+html[data-theme='tinta'] [data-slot='table-row'][data-state='selected'] {
+  background: #faf0c8;
+}
+
+/* ---------- Sliders y controles ---------- */
+html[data-theme='tinta'] [data-slot='slider-range'] {
+  background: #b39ede;
+}
+html[data-theme='tinta'] [data-slot='slider-thumb'] {
+  border-color: #8a6fbf;
+  background: #fffdfb;
+  box-shadow: 0 1px 4px rgba(81, 70, 83, 0.25);
+}
+html[data-theme='tinta'] [data-slot='slider-track'] {
+  background: rgba(81, 70, 83, 0.15);
+}
+
+/* ---------- Diálogos ---------- */
+html[data-theme='tinta'] [data-slot='dialog-overlay'],
+html[data-theme='tinta'] [data-slot='alert-dialog-overlay'] {
+  background: rgba(81, 70, 83, 0.4);
+}
+html[data-theme='tinta'] [data-slot='dialog-content'],
+html[data-theme='tinta'] [data-slot='alert-dialog-content'] {
+  background: #faf6fc;
+  border-color: #b9ddf4;
+  color: #514653;
+}
