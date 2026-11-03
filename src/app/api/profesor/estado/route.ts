@@ -69,6 +69,7 @@ export async function GET() {
             usuarioId: m.usuario.id,
             nombre: m.usuario.nombre,
             cargo: m.cargo,
+            representante: m.representante,
             puntos: m.puntos,
           })),
           decisionEstado: dec?.estado ?? 'PENDIENTE',

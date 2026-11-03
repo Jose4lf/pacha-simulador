@@ -64,6 +64,8 @@ export interface GerenteComite {
   usuarioId: string
   nombre: string
   cargo: string
+  /** 👑 Único integrante que toma las decisiones del grupo. */
+  representante: boolean
   puntos: number
 }
 
@@ -135,7 +137,9 @@ export interface EstudioDefFront {
 
 export interface AlumnoEstado {
   usuario: UsuarioSesion
-  membresia: { cargo: string; puntos: number }
+  /** false = SIN DESIGNAR: la cuenta existe pero el docente aún no lo asigna a una empresa. */
+  designado: boolean
+  membresia: { cargo: string; puntos: number; esRepresentante: boolean } | null
   equipo: { id: string; nombre: string; color: string }
   industria: { id: string; nombre: string; anioActual: number; anioMaximo: number; estado: string }
   marcas: MarcaEstado[]
@@ -150,9 +154,7 @@ export interface AlumnoEstado {
   estudiosComprados: { anio: number; estudioId: number; costo: number; tieneDatos: boolean }[]
   costoEstudiosAnio: number
   ranking: RankingFila[]
-  config: { id: { presupuestoMin: number; presupuestoMax: number; maxProyectosPorAnio: number; maxNombresPorSimulacion: number }; catalogoEstudios: EstudioDefFront[] }
-  /** Permisos de área: qué áreas abrió su encargado al resto del equipo. */
-  permisos: { cargo: string; abierto: boolean }[]
+  config: { id: { presupuestoMin: number; presupuestoMax: number; maxProyectosPorAnio: number; maxNombresPorSimulacion: number }; catalogoEstudios: EstudioDefFront[]; maxIntegrantes: number }
   /** Eventos que ocurren/ocurrieron dentro de esta simulación, por año (doc §15). */
   eventos: EventoAlumno[]
   /** Historia contable por marca y año (reportes del equipo). */
@@ -208,7 +210,7 @@ export interface ProfesorIndustria {
     color: string
     numMarcas: number
     marcas: { id: string; nombre: string }[]
-    integrantes: { usuarioId: string; nombre: string; cargo: string; puntos: number }[]
+    integrantes: { usuarioId: string; nombre: string; cargo: string; representante: boolean; puntos: number }[]
     decisionEstado: string
     decisionId: string | null
     aprobada: boolean
@@ -349,6 +351,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ nombre, periodos, empresas }),
     }),
+  /** 🗑️ Elimina una simulación completa; los estudiantes quedan SIN DESIGNAR. */
+  eliminarIndustria: (industriaId: string) =>
+    request<{ ok: boolean; equiposEliminados: number }>(`/api/profesor/industrias?id=${encodeURIComponent(industriaId)}`, {
+      method: 'DELETE',
+    }),
+  /** 👑 Designa (o cambia) al REPRESENTANTE de una empresa. */
+  definirRepresentante: (equipoId: string, usuarioId: string) =>
+    request<{ ok: boolean; representante: string }>('/api/profesor/representante', {
+      method: 'POST',
+      body: JSON.stringify({ equipoId, usuarioId }),
+    }),
   aprobarDecision: (decisionId: string, aprobada: boolean) =>
     request<{ ok: boolean; estado: string }>('/api/profesor/aprobar', {
       method: 'POST',
@@ -378,13 +391,6 @@ export const api = {
     request<{ ok: boolean; nombre: string }>('/api/decano/usuarios', {
       method: 'POST',
       body: JSON.stringify({ accion: 'eliminar', usuarioId }),
-    }),
-
-  // Permiso de área: el encargado abre/cierra su área al resto del equipo
-  cambiarPermisoArea: (cargo: string, abierto: boolean) =>
-    request<{ ok: boolean; cargo: string; abierto: boolean }>('/api/alumno/permisos', {
-      method: 'POST',
-      body: JSON.stringify({ cargo, abierto }),
     }),
 }
 

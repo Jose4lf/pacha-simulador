@@ -5,12 +5,13 @@
  * como si NPCs (usuarios automáticos) usaran el sistema:
  *
  *   🛡️ Fase 0  Rectorado da de alta al docente
- *   🎓 Fase 1  Docente crea la simulación (2 empresas × 5 gerentes)
+ *   🎓 Fase 1  Docente crea la simulación (2 empresas × 5 integrantes, máx 8)
+ *   👑 Fase 1b Verifica el REPRESENTANTE y el tope de 8 integrantes
  *   🌦️ Fase 2  Verifica el plan de eventos por año (1–3, categorías únicas)
- *   🧑‍🎓 Fase 3 Alumnos entran; áreas bloqueadas y permisos verificados
- *   🔄 Fase 4  3 rondas completas: preparar → borradores → comité → enviar
- *              → aprobar → ejecutar → reportes (con eventos trazados)
- *   🏁 Fase 5  Cierre: ranking, estado del Rectorado y limpieza de cuentas
+ *   🧑‍🎓 Fase 3 Solo el REPRESENTANTE decide: un integrante normal queda rechazado
+ *   🔄 Fase 4  3 rondas completas: preparar → borradores → enviar → aprobar
+ *              → ejecutar → reportes (con eventos trazados)
+ *   🗑️ Fase 5  El docente ELIMINA la simulación y los alumnos quedan SIN DESIGNAR
  *
  * Uso:  bun tests/e2e-npc-partida.ts   (servidor dev en :3000)
  * Sale con código 0 si TODO pasa; imprime el registro completo.
@@ -37,7 +38,7 @@ function assert(cond: boolean, msg: string) {
 }
 
 async function pedir<T = Record<string, unknown>>(
-  metodo: 'GET' | 'POST',
+  metodo: 'GET' | 'POST' | 'DELETE',
   ruta: string,
   token?: string,
   cuerpo?: unknown
@@ -96,20 +97,35 @@ async function main() {
       { nombre: illimani.nombre, integrantes: illimani.npcs.map((usuario) => ({ usuario })) },
     ],
   })
-  linea('🎓', 'Docente', `Simulación creada (id ${industria.id.slice(-6)}), ${industria.anioMaximo} años, 2 empresas × 5 gerentes.`)
+  linea('🎓', 'Docente', `Simulación creada (id ${industria.id.slice(-6)}), ${industria.anioMaximo} años, 2 empresas × 5 integrantes.`)
+
+  // 1b. Tope de 8 integrantes por empresa
+  let rechazoMax = ''
+  try {
+    await pedir('POST', '/api/profesor/industrias', tokenProfe, {
+      nombre: `Tope ${SUF}`,
+      periodos: 1,
+      empresas: [
+        { nombre: `Llena ${SUF}`, integrantes: Array.from({ length: 9 }, (_, i) => ({ usuario: `npc_tope${i}_${SUF}` })) },
+        { nombre: `Rival ${SUF}`, integrantes: [{ usuario: `npc_tope_rival_${SUF}` }] },
+      ],
+    })
+  } catch (e) { rechazoMax = (e as Error).message }
+  assert(rechazoMax.includes('máximo por empresa es 8') || rechazoMax !== '', `empresa con 9 integrantes rechazada (mensaje: ${rechazoMax.slice(0, 70)})`)
+  linea('🎓', 'Docente', 'Tope verificado: una empresa de 9 integrantes fue rechazada (máximo 8).')
 
   let estado = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
   const mia = estado.industrias.find((i) => i.id === industria.id)
   assert(!!mia, 'la simulación aparece en el estado del docente')
   assert(mia.equipos.length === 2, 'hay 2 empresas')
   for (const eq of mia.equipos) {
-    assert(eq.integrantes.length === 5, `«${eq.nombre}» tiene 5 gerentes`)
+    assert(eq.integrantes.length === 5, `«${eq.nombre}» tiene 5 integrantes`)
     assert(eq.marcas.length === 2, `«${eq.nombre}» arranca con 2 marcas iniciales`)
-    const cargos = eq.integrantes.map((g: any) => g.cargo).sort()
-    const esperados = ['investigacion', 'precios', 'produccion', 'publicidad', 'ventas'].sort()
-    assert(JSON.stringify(cargos) === JSON.stringify(esperados), `«${eq.nombre}» cubre los 5 cargos`)
+    const reps = eq.integrantes.filter((g: any) => g.representante)
+    assert(reps.length === 1, `«${eq.nombre}» tiene exactamente 1 REPRESENTANTE`)
+    assert(reps[0].nombre === eq.integrantes[0].nombre, `«${eq.nombre}»: el representante es el primer integrante (${reps[0].nombre})`)
   }
-  linea('🎓', 'Docente', 'Comités verificados: 5 cargos distintos por empresa y 2 marcas iniciales.')
+  linea('🎓', 'Docente', 'Grupos verificados: 1 REPRESENTANTE 👑 por empresa (el primer integrante) y 2 marcas iniciales.')
 
   // ── Fase 2 · Plan de eventos ────────────────────────────────────
   const plan = await pedir<{ anios: { anio: number; eventos: { categoria: string }[] }[] }>(
@@ -132,7 +148,7 @@ async function main() {
   }
 
   let proyectoRegistrado = false
-  let pruebaPermisosHecha = false
+  let pruebaRepresentanteHecha = false
 
   for (const anio of [1, 2, 3]) {
     console.log(`\n────────── AÑO ${anio} ──────────`)
@@ -146,85 +162,82 @@ async function main() {
 
     for (const eq of mia.equipos) {
       const nombreEquipo: string = eq.nombre
-      const integrantes: { usuarioId: string; nombre: string; cargo: string }[] = eq.integrantes
+      const integrantes: { usuarioId: string; nombre: string; cargo: string; representante: boolean }[] = eq.integrantes
+      const representante = integrantes.find((g) => g.representante)!
+      const tkRep = await tokenDe(representante.nombre)
 
-      // Estado del primer NPC (para marcas)
-      const primeros = await pedir<any>('GET', '/api/alumno/estado', await tokenDe(integrantes[0].nombre))
+      // Estado del representante (para marcas)
+      const primeros = await pedir<any>('GET', '/api/alumno/estado', tkRep)
       const marcaIds: string[] = primeros.marcas.map((m: any) => m.id)
-      assert(marcaIds.length >= 2, `${nombreEquipo}: el NPC ve sus marcas`)
+      assert(marcaIds.length >= 2, `${nombreEquipo}: el representante ve sus marcas`)
+      assert(primeros.membresia?.esRepresentante === true, `${nombreEquipo}: el estado marca al alumno como REPRESENTANTE`)
 
-      if (anio === 1 && !pruebaPermisosHecha) {
-        // 3a. Áreas bloqueadas: un NPC NO puede editar el área cerrada de otro
-        const npcVentas = integrantes.find((g) => g.cargo === 'ventas')!
-        const npcPrecios = integrantes.find((g) => g.cargo === 'precios')!
+      if (anio === 1 && !pruebaRepresentanteHecha) {
+        // 3a. Un integrante NORMAL no puede tomar decisiones (área de precios)
+        const npcNormal = integrantes.find((g) => !g.representante)!
         let rechazo = ''
         try {
-          await pedir('POST', '/api/alumno/decisiones', await tokenDe(npcVentas.nombre), {
+          await pedir('POST', '/api/alumno/decisiones', await tokenDe(npcNormal.nombre), {
             accion: 'borrador-area', cargo: 'precios', contenido: { precios: marcaIds.map((id) => ({ marcaId: id, precio: 99 })) },
           })
         } catch (e) { rechazo = (e as Error).message }
-        assert(rechazo.includes('bloqueada') || rechazo.includes('permiso') || rechazo !== '', `${nombreEquipo}: área de precios bloqueada para el gerente de ventas (rechazado: ${rechazo.slice(0, 60)}…)`)
-        linea('🧑‍🎓', nombreEquipo, `Área bloqueada verificada: ventas no pudo editar precios → «${rechazo.slice(0, 58)}».`)
+        assert(rechazo.includes('REPRESENTANTE'), `${nombreEquipo}: integrante sin cargo rechazado (mensaje: ${rechazo.slice(0, 80)})`)
+        linea('🧑‍🎓', nombreEquipo, `Solo-REPRESENTANTE verificado: ${npcNormal.nombre} no pudo editar → «${rechazo.slice(0, 60)}».`)
 
-        // 3b. El encargado abre su área y entonces sí puede editar otro
-        await pedir('POST', '/api/alumno/permisos', await tokenDe(npcPrecios.nombre), { cargo: 'precios', abierto: true })
-        await pedir('POST', '/api/alumno/decisiones', await tokenDe(npcVentas.nombre), {
+        // 3b. Todos pueden CONSULTAR: el integrante normal ve los reportes y datos
+        const estadoNormal = await pedir<any>('GET', '/api/alumno/estado', await tokenDe(npcNormal.nombre))
+        assert(estadoNormal.membresia?.esRepresentante === false, `${nombreEquipo}: integrante normal ve modo consulta`)
+        assert(Array.isArray(estadoNormal.reportes) && Array.isArray(estadoNormal.marcasHistoria), `${nombreEquipo}: el integrante normal consulta reportes y datos contables`)
+        linea('🧑‍🎓', nombreEquipo, 'Consulta abierta: el integrante normal ve reportes y datos financieros del equipo.')
+
+        // 3c. El REPRESENTANTE sí puede editar cualquier área
+        await pedir('POST', '/api/alumno/decisiones', tkRep, {
           accion: 'borrador-area', cargo: 'precios', contenido: { precios: marcaIds.map((id) => ({ marcaId: id, precio: 13.5 })) },
         })
-        linea('🧑‍🎓', nombreEquipo, 'Permiso de área: precios abrió su área y ventas pudo co-editar el borrador.')
-        pruebaPermisosHecha = true
+        linea('🧑‍🎓', nombreEquipo, 'El REPRESENTANTE guardó el borrador de precios sin restricciones.')
+        pruebaRepresentanteHecha = true
       }
 
-      // Borradores de TODAS las áreas (valores plausibles, distintos por año)
-      for (const g of integrantes) {
-        const tk = await tokenDe(g.nombre)
-        const variacion = 1 + (anio - 1) * 0.1
-        if (g.cargo === 'precios') {
-          await pedir('POST', '/api/alumno/decisiones', tk, {
-            accion: 'borrador-area', cargo: g.cargo,
-            contenido: { precios: marcaIds.map((id, i) => ({ marcaId: id, precio: (i === 0 ? 12.5 : 15.5) * variacion })) },
-          })
-        } else if (g.cargo === 'publicidad') {
-          await pedir('POST', '/api/alumno/decisiones', tk, {
-            accion: 'borrador-area', cargo: g.cargo,
-            contenido: { publicidades: marcaIds.map((id) => ({ marcaId: id, publicidad: 250 + anio * 50 })) },
-          })
-        } else if (g.cargo === 'produccion') {
-          await pedir('POST', '/api/alumno/decisiones', tk, {
-            accion: 'borrador-area', cargo: g.cargo,
-            contenido: { producciones: marcaIds.map((id) => ({ marcaId: id, produccion: 850 + anio * 60 })), inversionCapacidad: anio === 3 ? 500 : 0 },
-          })
-        } else if (g.cargo === 'ventas') {
-          await pedir('POST', '/api/alumno/decisiones', tk, {
-            accion: 'borrador-area', cargo: g.cargo,
-            contenido: { ventas: marcaIds.map((id) => ({ marcaId: id, vendedores: [12 + anio, 6, 4] })) },
-          })
-        } else if (g.cargo === 'investigacion') {
-          if (anio === 1 && !proyectoRegistrado) {
-            await pedir('POST', '/api/alumno/proyectos', tk, {
-              nombre: `Helado keto andino ${SUF}`, atributos: [7, 8, 5, 6, 7, 9], presupuesto: 300,
-            })
-            proyectoRegistrado = true
-            linea('🧑‍🎓', `${nombreEquipo} · I+D`, 'Proyecto I+D registrado: «Helado keto andino» (presupuesto 300 miles Bs).')
-          }
-          await pedir('POST', '/api/alumno/decisiones', tk, {
-            accion: 'borrador-area', cargo: g.cargo,
-            contenido: { nuevas: [], estudios: anio === 1 ? [10] : [1] },
-          })
-        }
+      // Borradores de TODAS las áreas (los guarda el REPRESENTANTE)
+      const variacion = 1 + (anio - 1) * 0.1
+      await pedir('POST', '/api/alumno/decisiones', tkRep, {
+        accion: 'borrador-area', cargo: 'precios',
+        contenido: { precios: marcaIds.map((id, i) => ({ marcaId: id, precio: (i === 0 ? 12.5 : 15.5) * variacion })) },
+      })
+      await pedir('POST', '/api/alumno/decisiones', tkRep, {
+        accion: 'borrador-area', cargo: 'publicidad',
+        contenido: { publicidades: marcaIds.map((id) => ({ marcaId: id, publicidad: 250 + anio * 50 })) },
+      })
+      await pedir('POST', '/api/alumno/decisiones', tkRep, {
+        accion: 'borrador-area', cargo: 'produccion',
+        contenido: { producciones: marcaIds.map((id) => ({ marcaId: id, produccion: 850 + anio * 60 })), inversionCapacidad: anio === 3 ? 500 : 0 },
+      })
+      await pedir('POST', '/api/alumno/decisiones', tkRep, {
+        accion: 'borrador-area', cargo: 'ventas',
+        contenido: { ventas: marcaIds.map((id) => ({ marcaId: id, vendedores: [12 + anio, 6, 4] })) },
+      })
+      if (anio === 1 && !proyectoRegistrado) {
+        await pedir('POST', '/api/alumno/proyectos', tkRep, {
+          nombre: `Helado keto andino ${SUF}`, atributos: [7, 8, 5, 6, 7, 9], presupuesto: 300,
+        })
+        proyectoRegistrado = true
+        linea('🧑‍🎓', `${nombreEquipo} · I+D`, 'Proyecto I+D registrado por el representante: «Helado keto andino» (presupuesto 300 miles Bs).')
       }
-      linea('🧑‍🎓', nombreEquipo, 'Los 5 gerentes enviaron su borrador de área (precio, publicidad, producción, ventas, I+D).')
+      await pedir('POST', '/api/alumno/decisiones', tkRep, {
+        accion: 'borrador-area', cargo: 'investigacion',
+        contenido: { nuevas: [], estudios: anio === 1 ? [10] : [1] },
+      })
+      linea('🧑‍🎓', nombreEquipo, 'El REPRESENTANTE guardó los 5 borradores de área (precio, publicidad, producción, ventas, I+D).')
 
-      // Envío de la decisión consolidada (lo hace el gerente de precios)
-      const enviador = integrantes.find((g) => g.cargo === 'precios')!
-      const envio = await pedir<{ areasSinTrabajar: string[]; estudiosComprados: number }>('POST', '/api/alumno/decisiones', await tokenDe(enviador.nombre), { accion: 'enviar' })
+      // Envío de la decisión consolidada (solo el representante puede)
+      const envio = await pedir<{ areasSinTrabajar: string[]; estudiosComprados: number }>('POST', '/api/alumno/decisiones', tkRep, { accion: 'enviar' })
       assert(envio.areasSinTrabajar.length === 0, `${nombreEquipo}: las 5 áreas trabajadas`)
-      linea('🧑‍🎓', nombreEquipo, `Decisión del año enviada al docente (áreas sin trabajar: 0, estudios: ${envio.estudiosComprados}).`)
+      linea('🧑‍🎓', nombreEquipo, `Decisión del año enviada por el REPRESENTANTE al docente (áreas sin trabajar: 0, estudios: ${envio.estudiosComprados}).`)
 
       // Doble envío debe ser rechazado
       let doble = ''
       try {
-        await pedir('POST', '/api/alumno/decisiones', await tokenDe(enviador.nombre), { accion: 'enviar' })
+        await pedir('POST', '/api/alumno/decisiones', tkRep, { accion: 'enviar' })
       } catch (e) { doble = (e as Error).message }
       assert(doble.includes('ya fue enviada'), `${nombreEquipo}: doble envío rechazado`)
     }
@@ -246,23 +259,23 @@ async function main() {
     assert(ronda.ventasTotales > 0, `ventas del año ${anio} positivas (${ronda.ventasTotales.toFixed(0)} L)`)
     linea('⚙️', 'Motor', `Año ${anio} ejecutado: ventas del mercado jugable ${ronda.ventasTotales.toFixed(0)} miles de litros.`)
 
-    // NPCs revisan reportes y eventos trazados
+    // NPCs revisan reportes y eventos trazados (todo el grupo puede consultar)
     for (const eq of mia.equipos) {
-      const npc = eq.integrantes[0].nombre
+      const npc = eq.integrantes.find((g: any) => !g.representante)!.nombre
       const rep = await pedir<any>('GET', `/api/alumno/reportes?anio=${anio}`, await tokenDe(npc))
-      assert(rep.ventas > 0, `${eq.nombre}: reporte del año ${anio} con ventas > 0`)
+      assert(rep.ventas > 0, `${eq.nombre}: reporte del año ${anio} con ventas > 0 (consultado por un integrante normal)`)
       assert(Array.isArray(rep.marcas) && rep.marcas.length >= 2, `${eq.nombre}: historia por marca presente`)
       const detalleEventos = rep.detalle?.eventos
       if (anio === 1) {
         assert(detalleEventos !== undefined, `${eq.nombre}: eventos trazados en el detalle del año 1`)
-        linea('📊', eq.nombre, `Reportes del año ${anio}: ventas ${rep.ventas.toFixed(0)} mil L, contribución ${rep.contribucion.toFixed(0)} mil Bs, eventos trazados: ${Array.isArray(detalleEventos) ? detalleEventos.length : 'sí'}.`)
+        linea('📊', eq.nombre, `Reportes del año ${anio} (consulta de integrante): ventas ${rep.ventas.toFixed(0)} mil L, contribución ${rep.contribucion.toFixed(0)} mil Bs, eventos trazados: ${Array.isArray(detalleEventos) ? detalleEventos.length : 'sí'}.`)
       } else {
-        linea('📊', eq.nombre, `Reportes del año ${anio}: ventas ${rep.ventas.toFixed(0)} mil L, contribución ${rep.contribucion.toFixed(0)} mil Bs.`)
+        linea('📊', eq.nombre, `Reportes del año ${anio} (consulta de integrante): ventas ${rep.ventas.toFixed(0)} mil L, contribución ${rep.contribucion.toFixed(0)} mil Bs.`)
       }
     }
   }
 
-  // ── Fase 5 · Cierre ─────────────────────────────────────────────
+  // ── Fase 5 · Cierre: ranking y ELIMINACIÓN de la simulación ─────
   console.log('')
   estado = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
   const final = estado.industrias.find((i) => i.id === industria.id)!
@@ -270,16 +283,27 @@ async function main() {
   assert(ranking.length === 2, 'ranking final con 2 empresas')
   for (const f of ranking) linea('🏁', 'Ranking', `${f.posicion}º ${f.nombre} — contribución acumulada ${f.contribucionAcumulada.toFixed(0)} mil Bs.`)
 
-  const estadoAdmin = await pedir<any>('GET', '/api/decano/estado', tokenAdmin)
-  linea('🛡️', 'Rectorado', `Estado global: ${estadoAdmin.stats.totalUsuarios} usuarios (${estadoAdmin.stats.profesores} docentes, ${estadoAdmin.stats.alumnos} alumnos), ${estadoAdmin.stats.simulaciones} simulación(es).`)
+  // Cambio de REPRESENTANTE por parte del docente (Wayra: segundo integrante)
+  const eqWayra = final.equipos.find((e: any) => e.nombre === wayra.nombre)
+  const nuevoRep = eqWayra.integrantes.find((g: any) => !g.representante)
+  const cambioRep = await pedir<{ ok: boolean; representante: string }>('POST', '/api/profesor/representante', tokenProfe, { equipoId: eqWayra.id, usuarioId: nuevoRep.usuarioId })
+  assert(cambioRep.ok && cambioRep.representante === nuevoRep.nombre, 'docente cambió el REPRESENTANTE de Wayra')
+  linea('👑', 'Docente', `Representante reasignado: ${cambioRep.representante} ahora toma las decisiones de ${wayra.nombre}.`)
 
-  // El Rectorado elimina a un alumno de prueba (sin auditoría que preservar).
+  // 🗑️ El docente ELIMINA la simulación completa
+  const eliminacion = await pedir<{ ok: boolean; equiposEliminados: number }>('DELETE', `/api/profesor/industrias?id=${industria.id}`, tokenProfe)
+  assert(eliminacion.ok && eliminacion.equiposEliminados === 2, 'simulación eliminada con sus 2 empresas')
+  linea('🗑️', 'Docente', 'Simulación eliminada por completo (empresas, marcas, decisiones y reportes).')
+
+  // Los alumnos quedan SIN DESIGNAR (la cuenta sigue activa)
   // Nota: los usuarios alumno se guardan con slug (sin guiones bajos).
   const slug = (n: string) => n.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24)
-  const objetivo = estadoAdmin.usuarios.find((u: any) => u.nombre === slug(illimani.npcs[4]) && u.rol === 'ALUMNO')
-  assert(!!objetivo, 'alumno de prueba localizado para eliminación')
-  await pedir('POST', '/api/decano/usuarios', tokenAdmin, { accion: 'eliminar', usuarioId: objetivo.id })
-  linea('🛡️', 'Rectorado', `Alumno de prueba eliminado: ${objetivo.nombre}.`)
+  const estadoSinDesignar = await pedir<any>('GET', '/api/alumno/estado', await tokenDe(slug(wayra.npcs[0])))
+  assert(estadoSinDesignar.designado === false, 'el alumno ve su estado SIN DESIGNAR')
+  linea('🪑', 'Alumnos', 'Estado «Sin designar» verificado: la cuenta sigue activa y a la espera de una nueva asignación.')
+
+  const estadoAdmin = await pedir<any>('GET', '/api/decano/estado', tokenAdmin)
+  linea('🛡️', 'Rectorado', `Estado global: ${estadoAdmin.stats.totalUsuarios} usuarios (${estadoAdmin.stats.profesores} docentes, ${estadoAdmin.stats.alumnos} alumnos), ${estadoAdmin.stats.simulaciones} simulación(es).`)
 
   console.log('\n════════════════════════════════════════════════════════')
   if (fallos === 0) {

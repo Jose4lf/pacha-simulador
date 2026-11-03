@@ -1,11 +1,12 @@
 import { error, ok, body } from '@/lib/pacha/api-helpers'
 import { requireRol } from '@/lib/pacha/auth'
-import { crearIndustria, type EmpresaEntrada } from '@/lib/pacha/simulacion'
+import { crearIndustria, eliminarIndustria, type EmpresaEntrada } from '@/lib/pacha/simulacion'
 import { PachaError } from '@/lib/pacha/tipos'
 
 /**
- * Crea una simulación: 2-10 empresas, cada una con sus gerentes (alumnos,
- * se crean si no existen) y el nº de periodos configurado por el docente.
+ * Crea una simulación: 2-10 empresas, cada una con sus integrantes (alumnos,
+ * se crean si no existen, máximo 8 por empresa) y el nº de periodos configurado.
+ * El primer integrante de cada empresa es el REPRESENTANTE del grupo.
  */
 export async function POST(req: Request) {
   try {
@@ -18,6 +19,23 @@ export async function POST(req: Request) {
     if (!Array.isArray(empresas)) throw new PachaError('Falta la lista de empresas')
     const industria = await crearIndustria(nombre, usuario.id, { periodos, empresas })
     return ok({ id: industria.id, nombre: industria.nombre, anioMaximo: industria.anioMaximo })
+  } catch (e) {
+    return error(e)
+  }
+}
+
+/**
+ * ELIMINA una simulación completa: ?id=<industriaId>
+ * Los estudiantes que participaban quedan SIN DESIGNAR (sus cuentas se
+ * conservan; verán ese estado al iniciar sesión hasta ser asignados de nuevo).
+ */
+export async function DELETE(req: Request) {
+  try {
+    const usuario = await requireRol('PROFESOR')
+    const id = new URL(req.url).searchParams.get('id')
+    if (!id) throw new PachaError('Falta el id de la simulación')
+    const res = await eliminarIndustria(id, usuario.id)
+    return ok(res)
   } catch (e) {
     return error(e)
   }

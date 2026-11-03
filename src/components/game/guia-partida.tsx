@@ -140,25 +140,26 @@ function FaseDocente() {
         <Paso n={1}>
           Entra con tu cuenta de docente y pulsa <b className="text-zinc-100">Nueva simulación</b>. Elige
           nombre (ejemplo: «Práctica Mercado A»), la cantidad de años (1 a 10) y las empresas: cada una con
-          su nombre y la lista de usuarios de sus integrantes (5 gerentes por empresa es lo ideal: uno por
-          área).
+          su nombre y la lista de usuarios de sus integrantes (de 1 a 8 integrantes por empresa; el
+          <b> REPRESENTANTE</b> —el primero de la lista— será quien tome las decisiones).
         </Paso>
         <Paso n={2}>
-          Al guardar, el sistema crea a los <b>alumnos automáticamente</b> (clave inicial <b>321</b>), les
-          asigna los 5 cargos del comité en orden — Precios, Publicidad, Producción, Ventas e
-          Investigación — y a cada empresa le da 2 marcas iniciales (una de agua y una de crema) con
-          capacidad de 1.000.000 de litros.
+          Al guardar, el sistema crea a los <b>alumnos automáticamente</b> (clave inicial <b>321</b>) y a
+          cada empresa le da 2 marcas iniciales (una de agua y una de crema) con capacidad de 1.000.000 de
+          litros. El primer integrante de cada empresa queda como <b>REPRESENTANTE 👑</b>: puedes cambiarlo
+          cuando quieras desde la tabla de empresas (lista «👑 Cambiar representante»).
         </Paso>
         <Paso n={3}>
           Pasa la lista: cada alumno necesita su <b>usuario</b> (la clave es 321 hasta que el Rectorado o el
           docente la cambien). En «Mis simulaciones» verás el estado de cada empresa: si ya envió su
-          decisión, qué áreas trabajaron y si tú ya aprobaste.
+          decisión, qué áreas trabajaron y si tú ya aprobaste. También puedes <b>eliminar una simulación</b>
+          completa con «🗑️ Eliminar simulación»: los estudiantes quedan SIN DESIGNAR hasta que los asignes a
+          una nueva partida.
         </Paso>
       </ol>
       <Alerta>
         Un mismo usuario no puede pertenecer a dos empresas a la vez. Si un alumno se retira, el Rectorado
-        puede eliminarlo y el docente reasigna el cargo creando de nuevo la simulación o gestionando el
-        comité.
+        puede eliminarlo y el docente designa a otro REPRESENTANTE desde la tabla de empresas.
       </Alerta>
     </>
   )
@@ -201,38 +202,43 @@ function FaseEventos() {
 function FaseAlumnos() {
   return (
     <>
-      <Rol emoji="🧑‍🎓">Alumnos · Comité de Dirección de Marketing</Rol>
-      <Titulo>Fase 3 · Primer ingreso y áreas bloqueadas</Titulo>
+      <Rol emoji="🧑‍🎓">Alumnos · Grupo de Dirección</Rol>
+      <Titulo>Fase 3 · Primer ingreso y roles del grupo</Titulo>
       <Parrafo>
-        Cada alumno es el gerente de UNA área de la empresa. Por defecto su área está{' '}
-        <b>bloqueada para el resto del comité</b>: solo el encargado edita esas decisiones.
+        Todos los integrantes del grupo <b>ven y analizan todo</b>: reportes, cifras financieras y las
+        decisiones de las 5 áreas. Solo <b>UNO</b> — el <b className="text-amber-300">REPRESENTANTE 👑</b> —
+        edita y envía las decisiones del año (el docente puede cambiar quién es el representante en
+        cualquier momento).
       </Parrafo>
       <ol className="mb-4 space-y-3">
         <Paso n={1}>
           El alumno entra al login con su usuario (ejemplo: <b>colibri</b>) y la clave <b>321</b>. Ve su
-          empresa, su cargo, sus puntos de desempeño y el entorno del año actual (eventos anunciados e
-          inflación).
+          empresa, si es REPRESENTANTE o integrante, sus puntos de desempeño y el entorno del año actual
+          (eventos anunciados e inflación). Si aún no fue asignado a ninguna empresa verá su estado
+          «Sin designar» y deberá esperar al docente.
         </Paso>
         <Paso n={2}>
-          En <b className="text-zinc-100">Mi área</b> trabaja SOLO las pestañas de su área: precios por
-          marca, presupuesto de publicidad, producción e inversión en capacidad, vendedores por canal, o
-          estudios + proyectos de I+D. Cada área muestra sus reportes en números y gráficos; la historia
-          completa está en «Reportes generales».
+          En <b className="text-zinc-100">Decisiones</b> el grupo debate las 5 áreas: precios por marca,
+          presupuesto de publicidad, producción e inversión en capacidad, vendedores por canal, y estudios
+          + proyectos de I+D. Todos consultan; solo el REPRESENTANTE guarda los borradores y envía la
+          decisión. Los números de cada área están en «Reportes → Reportes por área».
         </Paso>
         <Paso n={3}>
-          El encargado puede <b className="text-zinc-100">abrir su área</b> (botón «Abrir área») para que
-          el resto del comité pueda editarla. Si el área está cerrada, los demás ven los datos en lectura
-          y el sistema rechaza guardar cambios ajenos.
+          En <b className="text-zinc-100">Reportes</b> todo el grupo analiza los resultados: resumen del
+          año, detalle mensual, ventas por departamento, resultados financieros (IVA, IT, IUE) e inflación.
+          Con el botón <b>«⬇️ Descargar reporte (Excel/CSV)»</b> obtienen el reporte con cifras completas y
+          nombres completos para el análisis contable del grupo.
         </Paso>
         <Paso n={4}>
-          Solo el <b>Gerente de Investigación y Desarrollo</b> tiene la pestaña de I+D: puede registrar un
-          proyecto nuevo (nombre, atributos objetivo 1-10, presupuesto 100-1000 miles Bs), ver su
-          probabilidad de éxito y, al enviarlo, el resto del comité lo revisa en el comité.
+          El REPRESENTANTE registra proyectos de I+D (nombre, atributos objetivo 1-10, presupuesto
+          100-1000 miles Bs) y, cuando un proyecto se aprueba, puede lanzar la marca nueva desde el área de
+          Investigación y Desarrollo.
         </Paso>
       </ol>
       <Alerta>
-        Cada gerente empieza con puntos de desempeño. Trabajar su área suma; dejar el área sin borrador
-        resta y puede llevar a sanciones del comité (amonestación, resta de puntos o expulsión).
+        Los puntos de desempeño son responsabilidad del REPRESENTANTE: por cada área con borrador guardado
+        suma; por cada área sin borrador resta. Además, el grupo (a través del representante) puede sancionar
+        a un integrante con desempeño muy negativo (amonestación, resta de puntos o expulsión).
       </Alerta>
     </>
   )
@@ -254,18 +260,19 @@ function FaseRonda() {
           anunciado.
         </Paso>
         <Paso n={2}>
-          <b className="text-zinc-100">Alumnos — Borradores por área:</b> cada gerente define las
-          decisiones de su área (ej.: precio Bs 12-18 por litro, publicidad en miles de Bs, producción
-          según capacidad, vendedores en tiendas/supermercados/kioscos) y pulsa «Enviar borrador». El I+D
-          además compra estudios de mercado y registra proyectos.
+          <b className="text-zinc-100">Alumnos — Borradores por área:</b> el REPRESENTANTE define las
+          decisiones de cada área junto a su grupo (ej.: precio Bs 12-18 por litro, publicidad en miles de
+          Bs, producción según capacidad, vendedores en tiendas/supermercados/kioscos) y pulsa «Guardar
+          borrador del área». El I+D además compra estudios de mercado y registra proyectos.
         </Paso>
         <Paso n={3}>
-          <b className="text-zinc-100">Alumnos — Comité:</b> la pestaña de comité muestra las decisiones de
-          cada integrante <b>por área y en cifras</b> (precio, presupuesto, producción, vendedores). El
-          comité discute, ajusta y puede sancionar a un gerente con desempeño muy negativo.
+          <b className="text-zinc-100">Alumnos — Grupo:</b> la pestaña de grupo muestra las decisiones de
+          cada área <b>en cifras</b> (precio, presupuesto, producción, vendedores). Todo el grupo analiza,
+          discute y ajusta; el representante aplica las sanciones que el grupo acuerde a un integrante con
+          desempeño muy negativo.
         </Paso>
         <Paso n={4}>
-          <b className="text-zinc-100">Alumnos — Enviar decisión:</b> cualquier gerente pulsa «Enviar
+          <b className="text-zinc-100">Alumnos — Enviar decisión:</b> el REPRESENTANTE pulsa «Enviar
           decisión al docente». El sistema consolida los 5 borradores; un área sin borrador usa los
           valores vigentes y queda marcada «sin trabajar» (penalización de puntos).
         </Paso>
@@ -283,8 +290,9 @@ function FaseRonda() {
         </Paso>
       </ol>
       <Tip>
-        Ejemplo real validado: con 2 empresas de 5 gerentes, el Año 1 se completa en 6 pasos y el motor
-        reporta ventas en litros, contribución en miles de Bs y participación % por empresa.
+        Ejemplo real validado: con 2 empresas de 5 integrantes (1 representante por grupo), el Año 1 se
+        completa en 6 pasos y el motor reporta ventas en litros, contribución en miles de Bs y participación %
+        por empresa.
       </Tip>
     </>
   )

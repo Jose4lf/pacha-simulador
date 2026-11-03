@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
 import { Badge } from '@/components/ui/badge'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
 
 const SLIDER_CLS =
@@ -111,8 +111,8 @@ export function AlumnoProyectos({
   refresh: () => Promise<void> | void
 }) {
   const cfg = estado.config.id
-  // Corrección: SOLO el Gerente de Investigación y Desarrollo registra proyectos
-  const esInvestigacion = estado.membresia?.cargo === 'investigacion'
+  // Nuevo modelo: solo el REPRESENTANTE del grupo registra proyectos de I+D
+  const esRepresentante = estado.membresia?.esRepresentante ?? false
   const [nombre, setNombre] = useState('')
   const [atributos, setAtributos] = useState<number[]>([5, 5, 5, 5, 5, 5])
   const [presupuesto, setPresupuesto] = useState(cfg.presupuestoMin + 200)
@@ -182,8 +182,8 @@ export function AlumnoProyectos({
         </div>
       )}
 
-      {/* Formulario de registro (solo el Gerente de I+D) */}
-      {esInvestigacion ? (
+      {/* Formulario de registro (solo el REPRESENTANTE) */}
+      {esRepresentante ? (
       <section
         aria-label="Registrar proyecto"
         className="rounded-2xl border-2 border-purple-400/40 bg-purple-400/5 p-4 sm:p-6"
@@ -308,17 +308,17 @@ export function AlumnoProyectos({
           </li>
           <li>· {cfg.maxNombresPorSimulacion} nombres por simulación</li>
           <li>
-            · Presupuesto {cfg.presupuestoMin}-{cfg.presupuestoMax}k
+            · Presupuesto {cfg.presupuestoMin}-{cfg.presupuestoMax} miles de Bs
           </li>
           <li>· Los aprobados se aplican al año siguiente en Decisiones</li>
         </ul>
       </section>
       ) : (
         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-center">
-          <p className="text-2xl" aria-hidden="true">🔒</p>
-          <p className="mt-1 text-xs font-bold text-amber-200">Solo el Gerente de Investigación y Desarrollo registra proyectos</p>
+          <p className="text-2xl" aria-hidden="true">👁️</p>
+          <p className="mt-1 text-xs font-bold text-amber-200">Modo consulta: solo el REPRESENTANTE del grupo registra proyectos de I+D</p>
           <p className="mt-0.5 text-[11px] text-zinc-400">
-            Los proyectos del equipo se revisan en el <b>Comité</b>; si uno se aprueba, el área de Investigación puede lanzar la marca nueva.
+            Los proyectos del equipo se revisan en el <b>Grupo</b>; si uno se aprueba, el representante puede lanzar la marca nueva desde Decisiones → Investigación y Desarrollo.
           </p>
         </div>
       )}

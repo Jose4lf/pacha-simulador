@@ -176,9 +176,9 @@ function Chip({ children, color = 'pink' }: { children: React.ReactNode; color?:
 
 function CapBienvenida() {
   const pasos = [
-    { n: 1, t: 'Cada área decide', d: 'Cada gerente trabaja su área (precios, publicidad, producción, distribución o I+D) y envía su borrador al comité.' },
-    { n: 2, t: 'El comité revisa', d: 'Todos ven los borradores en la pestaña Comité. Si un área no envió, se verá “sin trabajar” con valores predeterminados.' },
-    { n: 3, t: 'Envío al docente', d: 'Cuando todos revisaron, el comité envía la decisión del año. El docente la revisa y da el visto bueno.' },
+    { n: 1, t: 'El grupo debate y el representante decide', d: 'Todos los integrantes analizan las 5 áreas (precios, publicidad, producción, distribución o I+D); el REPRESENTANTE guarda los borradores.' },
+    { n: 2, t: 'El grupo revisa', d: 'Todos ven los borradores en la pestaña Grupo. Si un área no se trabajó, se verá “sin trabajar” con valores predeterminados.' },
+    { n: 3, t: 'Envío al docente', d: 'El REPRESENTANTE envía la decisión del año. El docente la revisa y da el visto bueno.' },
     { n: 4, t: 'El profesor corre el año', d: 'El motor simula el mercado y genera los reportes del año. Después, todos analizan y se repite el ciclo.' },
   ]
   return (
@@ -186,8 +186,8 @@ function CapBienvenida() {
       <Titulo>🍦 Bienvenida a PACHA</Titulo>
       <Parrafo>
         <strong className="text-zinc-100">PACHA</strong> es un simulador de marketing estilo videojuego por
-        empresas: forman parte de un <strong className="text-zinc-100">Comité de Dirección de Marketing</strong>{' '}
-        de 5 gerentes que dirige una firma de helados, compitiendo contra otras empresas de tu clase (de 2 a 10
+        empresas: forman parte de un <strong className="text-zinc-100">Grupo de Dirección</strong> de hasta 8
+        integrantes que dirige una firma de helados, compitiendo contra otras empresas de tu clase (de 2 a 10
         por mercado). Cada año toman decisiones de precios, publicidad, producción, fuerza de ventas, estudios
         de mercado e I+D. Después, el motor simula el mercado y les devuelve los resultados.
       </Parrafo>
@@ -216,7 +216,8 @@ function CapBienvenida() {
 
       <Tip>
         Tu profesor te dará usuario y contraseña (las cuentas demo usan la contraseña <strong>321</strong>). Cada
-        gerente entra con su propio usuario: todos ven la misma empresa y colaboran en las decisiones.
+        integrante entra con su propio usuario: todos ven la misma empresa y pueden analizar todos los números;
+        solo el REPRESENTANTE 👑 envía las decisiones.
       </Tip>
 
       <Subtitulo>Unidades del juego (¡importante!)</Subtitulo>
@@ -243,58 +244,46 @@ function CapBienvenida() {
 function CapComite() {
   return (
     <div>
-      <Titulo>👥 El Comité de Dirección de Marketing</Titulo>
+      <Titulo>👥 El Grupo de Dirección y el REPRESENTANTE</Titulo>
       <Parrafo>
-        Cada empresa la dirige un comité de <strong className="text-zinc-100">5 gerentes</strong>, cada uno con
-        un cargo y su responsabilidad. Cada área pertenece a su gerente: el comité lo revisa todo, pero
-        <strong className="text-zinc-100"> solo el encargado trabaja su área</strong>, salvo que abra el permiso
-        al equipo.
+        Cada empresa la juega un grupo de <strong className="text-zinc-100">1 a 8 integrantes</strong> con un
+        <strong className="text-zinc-100"> REPRESENTANTE 👑</strong>. <strong className="text-zinc-100">Todos
+        los integrantes pueden consultar todo</strong>: reportes, cifras financieras y las decisiones de las 5
+        áreas. Pero solo el REPRESENTANTE edita y envía las decisiones del año; si el grupo prefiere a otra
+        persona, el docente lo cambia desde la tabla de empresas.
       </Parrafo>
       <Tabla
-        encabezados={['Cargo', 'Responsabilidad']}
+        encabezados={['Rol', 'Responsabilidad']}
         filas={[
-          ['💰 Gerente de Precios y Producto', 'Precio Bs/unidad de cada marca y vigilancia del costo unitario.'],
-          ['📺 Gerente de Publicidad y Promoción', 'Presupuesto publicitario anual de cada marca.'],
-          ['🏭 Gerente de Producción', 'Producción en miles de unidades para evitar quiebres de stock.'],
-          ['🚚 Gerente de Distribución y Ventas', 'Fuerza de ventas por canal (tiendas, supermercados, kioscos).'],
-          ['🔬 Gerente de Investigación y Desarrollo', 'Compra de estudios, I+D y lanzamiento de marcas nuevas.'],
+          ['👑 REPRESENTANTE', 'Guarda los borradores de las 5 áreas, envía la decisión del año al docente, registra proyectos de I+D y aplica las sanciones que el grupo acuerde.'],
+          ['👤 Integrantes', 'Analizan todos los reportes y datos financieros, revisan las decisiones por área y aconsejan al representante. Pueden ver TODO, pero no editar.'],
+          ['🧑‍🏫 Docente', 'Designa o cambia al REPRESENTANTE en cualquier momento desde la tabla de empresas.'],
         ]}
       />
 
-      <Subtitulo>Las áreas: bloqueadas y con permiso</Subtitulo>
+      <Subtitulo>Las áreas de la decisión anual</Subtitulo>
       <Lista
         items={[
           <>
-            Tu pestaña <strong className="text-zinc-100">Mi área</strong> tiene el editor de decisiones de tu
-            cargo y los <strong className="text-zinc-100">reportes contables del área</strong>: tus números,
-            tablas y gráficos. Si quieres ver todos los datos de la empresa, ve a{' '}
-            <strong className="text-zinc-100">Reportes generales</strong>.
+            En <strong className="text-zinc-100">Decisiones</strong> todos ven las 5 áreas con sus datos: el
+            REPRESENTANTE las edita y el resto del grupo las consulta (modo 👁️ consulta).
           </>,
           <>
-            En <strong className="text-zinc-100">Decisiones</strong> ves las 5 áreas: la tuya editable y las
-            demás <Chip color="amber">🔒 bloqueadas</Chip> — solo su encargado puede trabajarlas.
+            El botón <Chip color="emerald">Guardar borrador del área</Chip> (REPRESENTANTE) publica esa área en
+            la pestaña <strong className="text-zinc-100">Grupo</strong>, donde el equipo revisa lo decidido por
+            área en números (precios, presupuestos, producción, vendedores, estudios).
           </>,
           <>
-            ¿Quieren colaborar? Desde <strong className="text-zinc-100">Mi área</strong>, el encargado pulsa{' '}
-            <Chip color="emerald">Abrir mi área al equipo</Chip> y el resto del comité ya puede trabajar ahí
-            con él. Puede volver a cerrarla cuando quiera.
+            Las pestañas de <strong className="text-zinc-100">Estudios</strong> e <strong>I+D</strong> son de
+            consulta para todos; el REPRESENTANTE registra proyectos y, cuando uno se aprueba, puede lanzar la
+            marca nueva desde el área de Investigación y Desarrollo.
           </>,
           <>
-            El botón <Chip color="emerald">Enviar borrador del área</Chip> publica esa área en la pestaña{' '}
-            <strong className="text-zinc-100">Comité</strong>, donde el equipo revisa lo decidido por área en
-            números (precios, presupuestos, producción, vendedores, estudios).
-          </>,
-          <>
-            El <strong className="text-zinc-100">Gerente de I+D</strong> es el único con las pestañas de
-            Estudios e I+D: registra proyectos y, cuando uno se aprueba, el comité puede lanzar la marca nueva
-            desde el área de Investigación.
-          </>,
-          <>
-            Si un área <strong className="text-zinc-100">no envía borrador</strong>, el comité la verá marcada
+            Si un área <strong className="text-zinc-100">no se trabajó</strong>, el grupo la verá marcada
             <Chip color="pink">sin trabajar</Chip> con los valores predeterminados (los vigentes de tus marcas).
           </>,
           <>
-            Después de revisar los borradores de todos, cualquier gerente puede pulsar{' '}
+            Después de revisar los borradores con el grupo, el REPRESENTANTE pulsa{' '}
             <Chip color="emerald">Enviar decisión del año</Chip>: eso consolida todo y se la manda al docente.
           </>,
           <>
@@ -308,22 +297,23 @@ function CapComite() {
       <Lista
         items={[
           <>
-            Cada gerente empieza con <Chip color="zinc">0 puntos</Chip>.
+            El REPRESENTANTE empieza con <Chip color="zinc">0 puntos</Chip> y responde por la decisión completa
+            del grupo.
           </>,
           <>
-            Si su área envió borrador gana <Chip color="emerald">+5</Chip>; si quedó{' '}
+            Por cada área con borrador guardado gana <Chip color="emerald">+5</Chip>; por cada área{' '}
             <strong className="text-zinc-100">sin trabajar</strong> pierde <Chip color="pink">−10</Chip>.
           </>,
           <>
-            Con <Chip color="pink">−20 o menos</Chip>, el comité puede{' '}
-            <strong className="text-zinc-100">penalizarlo</strong>: el grupo elige la sanción (amonestación
-            escrita, restar los puntos que decida o expulsarlo de la empresa) y el motivo queda registrado para
-            el docente.
+            Un integrante con <Chip color="pink">−20 o menos</Chip> puede ser{' '}
+            <strong className="text-zinc-100">penalizado</strong>: el grupo elige la sanción (amonestación
+            escrita, restar los puntos que decida o expulsarlo de la empresa) y el REPRESENTANTE la registra;
+            el motivo queda registrado para el docente.
           </>,
         ]}
       />
       <Tip>
-        Repartan las áreas al inicio, acuerden plazos internos y revisen el comité antes del envío final: un año
+        Repartan las áreas al inicio, acuerden plazos internos y revisen el grupo antes del envío final: un año
         con áreas “sin trabajar” juega con valores viejos y además golpea el desempeño del equipo.
       </Tip>
     </div>
@@ -404,7 +394,7 @@ function CapDecisiones() {
 
       <Subtitulo>📺 Publicidad (miles de Bs)</Subtitulo>
       <Parrafo>
-        Construye el <strong className="text-zinc-100">awareness</strong> (conocimiento de marca, de 2% a 95%).
+        Construye el <strong className="text-zinc-100">conocimiento de marca (awareness)</strong>, que va del 2% al 95%.
         Es <strong className="text-zinc-100">acumulativa</strong>: cada año conserva parte de lo logrado y
         añade según tu inversión. Especialmente determinante en Niños y Adolescentes.
       </Parrafo>
@@ -445,13 +435,13 @@ function CapDecisiones() {
             (visible para todos). Puede actualizarse cuantas veces quieran antes del envío final.
           </>,
           <>
-            <strong className="text-zinc-100">Enviar decisión del año</strong>: el comité consolida los 5
+            <strong className="text-zinc-100">Enviar decisión del año</strong>: el REPRESENTANTE consolida los 5
             borradores y la manda al docente (estado <Chip color="emerald">enviada</Chip>). Ya no se puede
             cambiar hasta el próximo año.
           </>,
           <>
             Si el comité <strong className="text-zinc-100">no envía</strong> y el docente corre el año, la
-            empresa juega con los valores vigentes y sus gerentes quedan <Chip color="pink">sin trabajar</Chip>{' '}
+            empresa juega con los valores vigentes y las áreas quedan <Chip color="pink">sin trabajar</Chip>{' '}
             (−10 puntos de desempeño cada uno).
           </>,
           'El costo de los estudios que marcó el área de I+D se cobra al enviar la decisión del año.',
@@ -758,7 +748,7 @@ function CapConsejos() {
           </>,
           <>
             <strong className="text-zinc-100">Trabajen el comité</strong>: si un área queda "sin trabajar", la
-            empresa decide con valores viejos y sus gerentes pierden puntos. Revisen los borradores antes del
+            empresa decide con valores viejos y el representante pierde puntos. Revisen los borradores antes del
             envío final.
           </>,
         ]}

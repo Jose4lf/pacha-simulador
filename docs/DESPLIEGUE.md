@@ -15,11 +15,15 @@ DATABASE_URL=postgresql://usuario:clave@host:puerto/basededatos
 La más simple para poner el simulador online en minutos sin pagar nada.
 
 1. Crea la base de datos gratis en [neon.tech](https://neon.tech)
-   (proyecto nuevo → copia la *Connection string*, termina en `?sslmode=require`).
+   (proyecto nuevo → copia la *Connection string* **POOLED**, termina en
+   `-pooler...neon.tech/...?sslmode=require`).
 2. Sube el código a GitHub.
 3. En [vercel.com](https://vercel.com) → *New Project* → importa el repositorio.
 4. En *Environment Variables* agrega:
-   - `DATABASE_URL` = la connection string de Neon.
+   - `DATABASE_URL` = la connection string **pooled** de Neon, con este formato:
+     ```
+     postgresql://usuario:clave@ep-xxxx-pooler.region.aws.neon.tech/pacha?sslmode=require&connection_limit=5&pool_timeout=10
+     ```
 5. Deploy. Vercel ejecuta `bun run build` (ya incluye `prisma generate`).
 6. Aplica las migraciones **una sola vez** desde tu máquina:
    ```bash
@@ -28,9 +32,17 @@ La más simple para poner el simulador online en minutos sin pagar nada.
 7. Abre la URL de Vercel → entra con el Administrador (`Admin` / `321`)
    **y cámbiale la clave desde el panel**.
 
-> ⚠️ En Neon la capa gratuita «duerme» la base tras 5 min de inactividad;
-> la primera conexión de cada clase tardará ~1 s en despertarla. Para uso
-> intensivo diario considera Railway o un VPS.
+> ⚠️ **Si los usuarios reportan que la app «se cuelga»** revisa estas 3 causas:
+> 1. **Falta el pooler**: en Vercel cada función serverless abre sus propias
+>    conexiones; conectarte directo a Neon las agota y las peticiones quedan
+>    esperando. Solución: usa SIEMPRE la URL con `-pooler` (puerto 6543) y
+>    `connection_limit=5&pool_timeout=10`, y luego haz *Redeploy*.
+> 2. **Neon dormido**: la capa gratuita apaga la BD tras ~5 min sin uso; la
+>    primera conexión de cada clase tarda 1-2 s en despertarla (no es un cuelgue).
+> 3. **Deploy desactualizado**: si hiciste cambios en tu máquina, súbelos a
+>    GitHub (`git push`) y espera el redeploy en Vercel antes de probar.
+>
+> Para uso intensivo diario considera Railway o un VPS.
 
 ## Opción 2 · Railway — cero fricción, ~5 USD/mes
 

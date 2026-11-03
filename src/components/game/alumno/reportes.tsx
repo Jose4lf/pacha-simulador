@@ -1,16 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Coins, Loader2, Package, PieChart, TrendingUp } from 'lucide-react'
+import { Coins, Download, Loader2, Package, PieChart, TrendingUp } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { fetchReporte, type AlumnoEstado, type ReporteDetalle } from '@/lib/pacha/api-client'
 import { LineChart, Line, Legend } from 'recharts'
 import { CANALES_BOLIVIA, SEGMENTOS_BOLIVIA, REGIONES } from '@/lib/pacha/config-bolivia'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ReportesPorArea } from '@/components/game/alumno/area-reportes'
+import { descargarReporteCsv } from '@/lib/pacha/exportar-csv'
+import { Button } from '@/components/ui/button'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
-const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + 'k u'
+/** Cifras COMPLETAS en pantalla: "Bs 12.346 mil" y "12.346 mil u" (sin abreviar a 12.3k). */
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
+const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
+
+/** Nombres completos de los meses (nada de «M1», «M2»…). */
+const MESES_ES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+/** Nombre legible de la variable económica que afecta cada evento. */
+const NOMBRE_VARIABLE: Record<string, string> = {
+  demanda: 'Demanda',
+  costo: 'Costos',
+  logistica: 'Logística',
+}
 
 const ROSA = '#f472b6'
 const TEAL = '#2dd4bf'
@@ -76,6 +89,7 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
   const [cargandoAnio, setCargandoAnio] = useState<number | null>(anioInicial)
   const [reporte, setReporte] = useState<ReporteDetalle | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [vista, setVista] = useState<'generales' | 'areas'>('generales')
 
   const cargando = anio !== null && cargandoAnio === anio
 
@@ -125,15 +139,64 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">📊 Reportes</h2>
+          <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">📊 Reportes contables</h2>
           <p className="mt-0.5 text-sm text-zinc-400">
-            {anio === 0
-              ? 'Reporte general: la historia del mercado de los 3 años anteriores a tu gestión.'
-              : 'Los números de tu imperio de helados, año por año.'}
+            Todos los integrantes del grupo pueden consultar y analizar estos números.
           </p>
+          {/* Sub-pestañas: generales / por área */}
+          <div className="mt-2 flex flex-wrap gap-1.5" role="tablist" aria-label="Tipo de reporte">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={vista === 'generales'}
+              onClick={() => setVista('generales')}
+              className={`flex h-9 items-center rounded-xl border px-3 text-xs font-bold ${
+                vista === 'generales'
+                  ? 'border-pink-400/40 bg-pink-400/15 text-zinc-100'
+                  : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/5'
+              }`}
+            >
+              🧾 Reportes generales
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={vista === 'areas'}
+              onClick={() => setVista('areas')}
+              className={`flex h-9 items-center rounded-xl border px-3 text-xs font-bold ${
+                vista === 'areas'
+                  ? 'border-pink-400/40 bg-pink-400/15 text-zinc-100'
+                  : 'border-white/10 bg-black/20 text-zinc-400 hover:bg-white/5'
+              }`}
+            >
+              🗂️ Reportes por área
+            </button>
+          </div>
         </div>
+        {vista === 'generales' && r && !error && (
+          <Button
+            type="button"
+            onClick={() => descargarReporteCsv(estado, r)}
+            title="Descarga el reporte completo en CSV (se abre en Excel) con cifras completas y nombres completos"
+            className="h-10 border border-emerald-400/40 bg-emerald-400/15 px-4 text-xs font-black text-emerald-200 hover:bg-emerald-400/25"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" /> ⬇️ Descargar reporte (Excel/CSV)
+          </Button>
+        )}
+      </div>
+
+      {vista === 'areas' ? (
+        <ReportesPorArea estado={estado} />
+      ) : (
+      <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm font-bold text-zinc-300">
+          {anio === 0
+            ? 'Reporte general: la historia del mercado de los 3 años anteriores a tu gestión.'
+            : 'Los números de tu imperio de helados, año por año.'}
+        </p>
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Elegir año">
           {aniosVisibles.map((a) => (
             <button
@@ -356,16 +419,16 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
               </p>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Demanda total</p>
-                  <p className="mt-1 text-lg font-black text-zinc-100">{(r.detalle.mercado.demandaTotal / 1000).toFixed(2)} M litros</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Demanda total (millones de litros)</p>
+                  <p className="mt-1 text-lg font-black text-zinc-100">{(r.detalle.mercado.demandaTotal / 1000).toFixed(2).replace('.', ',')} millones de litros</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Vendido por las empresas</p>
-                  <p className="mt-1 text-lg font-black text-pink-300">{(r.detalle.mercado.ventasEmpresas / 1000).toFixed(2)} M litros</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Vendido por las empresas (millones de litros)</p>
+                  <p className="mt-1 text-lg font-black text-pink-300">{(r.detalle.mercado.ventasEmpresas / 1000).toFixed(2).replace('.', ',')} millones de litros</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Resto del mercado</p>
-                  <p className="mt-1 text-lg font-black text-teal-300">{(r.detalle.mercado.ventasResto / 1000).toFixed(2)} M litros</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Resto del mercado (millones de litros)</p>
+                  <p className="mt-1 text-lg font-black text-teal-300">{(r.detalle.mercado.ventasResto / 1000).toFixed(2).replace('.', ',')} millones de litros</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
                   <p className="text-[10px] font-bold uppercase text-zinc-500">Captura de las empresas</p>
@@ -400,15 +463,15 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
                   <TableHeader>
                     <TableRow className="border-white/10">
                       <TableHead className="text-zinc-400">Mes</TableHead>
-                      <TableHead className="text-right text-zinc-400">Demanda (k L)</TableHead>
-                      <TableHead className="text-right text-zinc-400">Empresas (k L)</TableHead>
-                      <TableHead className="text-right text-zinc-400">Resto (k L)</TableHead>
+                      <TableHead className="text-right text-zinc-400">Demanda (miles de litros)</TableHead>
+                      <TableHead className="text-right text-zinc-400">Empresas (miles de litros)</TableHead>
+                      <TableHead className="text-right text-zinc-400">Resto (miles de litros)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {r.detalle.detalleMensual.map((d) => (
                       <TableRow key={d.mes} className="border-white/5">
-                        <TableCell className="text-xs font-bold text-zinc-200">Mes {d.mes}</TableCell>
+                        <TableCell className="text-xs text-zinc-400">{MESES_ES[d.mes - 1] ?? `Mes ${d.mes}`}</TableCell>
                         <TableCell className="text-right text-xs text-zinc-300">{d.demandaTotal.toLocaleString('es-BO')}</TableCell>
                         <TableCell className="text-right text-xs text-pink-300">{d.ventasEmpresas.toLocaleString('es-BO')}</TableCell>
                         <TableCell className="text-right text-xs text-teal-300">{d.ventasResto.toLocaleString('es-BO')}</TableCell>
@@ -438,7 +501,7 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
                   <TableHeader>
                     <TableRow className="border-white/10">
                       <TableHead className="text-zinc-400">Departamento</TableHead>
-                      <TableHead className="text-right text-zinc-400">Ventas (k L)</TableHead>
+                      <TableHead className="text-right text-zinc-400">Ventas (miles de litros)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -457,7 +520,7 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
           {r.detalle?.finanzas && (
             <div className="pacha-panel p-4">
               <h3 className="mb-2 text-sm font-black uppercase tracking-wide text-zinc-300">
-                💰 Resultados financieros (IVA · IT · IUE — doc §9)
+                💰 Resultados financieros (IVA — Impuesto al Valor Agregado · IT — Impuesto a las Transacciones · IUE — Impuesto sobre las Utilidades de las Empresas)
               </h3>
               <div className="overflow-x-auto">
                 <Table>
@@ -489,7 +552,7 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
                       </TableRow>
                     ))}
                     <TableRow className="border-white/10">
-                      <TableCell className="text-xs text-zinc-400">Margen bruto / operativo · ROI</TableCell>
+                      <TableCell className="text-xs text-zinc-400">Margen bruto · Margen operativo · ROI (rentabilidad de la inversión)</TableCell>
                       <TableCell className="text-right text-xs font-black text-amber-300">
                         {(((r.detalle.finanzas.margenBruto as number) ?? 0) * 100).toFixed(1)}% ·{' '}
                         {(((r.detalle.finanzas.margenOperativo as number) ?? 0) * 100).toFixed(1)}% · ROI{' '}
@@ -516,19 +579,19 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
               </h3>
               <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Capacidad instalada</p>
-                  <p className="mt-1 text-base font-black text-zinc-100">{Number(r.detalle.produccionAnio.capacidadInstalada ?? 0).toLocaleString('es-BO')}k L</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Capacidad instalada (miles de litros)</p>
+                  <p className="mt-1 text-base font-black text-zinc-100">{Number(r.detalle.produccionAnio.capacidadInstalada ?? 0).toLocaleString('es-BO')} miles de litros</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Utilización</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Utilización de la capacidad</p>
                   <p className="mt-1 text-base font-black text-pink-300">{String(r.detalle.produccionAnio.utilizacionPct ?? 0)}%</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Merma de producción (2%)</p>
-                  <p className="mt-1 text-base font-black text-zinc-100">{Number(r.detalle.produccionAnio.merma ?? 0).toLocaleString('es-BO')}k L</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Merma de producción (2 %, miles de litros)</p>
+                  <p className="mt-1 text-base font-black text-zinc-100">{Number(r.detalle.produccionAnio.merma ?? 0).toLocaleString('es-BO')} miles de litros</p>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <p className="text-[10px] font-bold uppercase text-zinc-500">Quiebres de stock</p>
+                  <p className="text-[10px] font-bold uppercase text-zinc-500">Quiebres de stock (veces sin producto)</p>
                   <p className="mt-1 text-base font-black text-orange-300">{String(r.detalle.produccionAnio.quiebresStock ?? 0)}</p>
                 </div>
               </div>
@@ -557,9 +620,9 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
                   <TableBody>
                     {r.detalle.eventos.map((e, i) => (
                       <TableRow key={i} className="border-white/5">
-                        <TableCell className="text-xs font-bold text-zinc-200 capitalize">{e.variable}</TableCell>
+                        <TableCell className="text-xs font-bold text-zinc-200">{NOMBRE_VARIABLE[e.variable] ?? e.variable}</TableCell>
                         <TableCell className="text-xs text-zinc-400">{e.region === 'NACIONAL' ? 'Nacional' : e.region.replace('_', ' ')}</TableCell>
-                        <TableCell className="text-xs text-zinc-400">M{e.mes}</TableCell>
+                        <TableCell className="text-xs text-zinc-400">{MESES_ES[e.mes - 1] ?? `Mes ${e.mes}`}</TableCell>
                         <TableCell className="text-xs text-zinc-400">
                           {e.eventos.map((x) => `${x.nombre} (${(x.efecto * 100).toFixed(0)}% × ${x.peso * 100}%)`).join(' + ')}
                         </TableCell>
@@ -581,16 +644,16 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
               </h3>
               <div className="flex flex-wrap gap-3 text-xs">
                 <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 font-semibold text-zinc-300">
-                  Escenario: <b className="text-zinc-100">{r.detalle.inflacion.escenario}</b>
+                  Escenario macroeconómico: <b className="text-zinc-100">{r.detalle.inflacion.escenario}</b>
                 </span>
                 <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 font-semibold text-zinc-300">
-                  πₜ = <b className="text-amber-300">{(r.detalle.inflacion.pi * 100).toFixed(2)}%</b>
+                  Inflación anual (π): <b className="text-amber-300">{(r.detalle.inflacion.pi * 100).toFixed(2)}%</b>
                 </span>
                 <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 font-semibold text-zinc-300">
                   Índice de precios: <b className="text-zinc-100">{r.detalle.inflacion.indicePreciosFin.toFixed(1)}</b>
                 </span>
                 <span className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 font-semibold text-zinc-300">
-                  Tipo de cambio: <b className="text-zinc-100">Bs {r.detalle.inflacion.tipoCambioFinal.toFixed(2)}/US$</b>
+                  Tipo de cambio (Bs por US$ 1): <b className="text-zinc-100">Bs {r.detalle.inflacion.tipoCambioFinal.toFixed(2)}</b>
                 </span>
               </div>
               {r.detalle.inflacion.factores.length > 0 && (
@@ -640,6 +703,8 @@ export function AlumnoReportes({ estado }: { estado: AlumnoEstado }) {
             </div>
           )}
         </>
+      )}
+      </>
       )}
     </div>
   )

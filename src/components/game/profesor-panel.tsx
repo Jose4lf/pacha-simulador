@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Eye, Factory, FileSpreadsheet, Loader2, Plus, Undo2, Users, Wand2, XCircle } from 'lucide-react'
+import { CheckCircle2, Eye, Factory, FileSpreadsheet, Loader2, Plus, Trash2, Undo2, Users, Wand2, XCircle } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { api, type ProfesorIndustria, type UsuarioSesion, type EmpresaCrearPayload } from '@/lib/pacha/api-client'
 import { slugUsuario } from '@/lib/pacha/slug'
@@ -30,9 +30,12 @@ import { Hud } from '@/components/game/hud'
 import { PlanEventos } from '@/components/game/plan-eventos'
 import { SplashCarga } from '@/components/game/login-screen'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
-const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + 'k u'
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
+const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
+
+/** Máximo de integrantes por empresa (igual que el backend). */
+const MAX_INTEGRANTES = 8
 
 /** Nombres cortos de los cargos (igual que el catálogo del backend). */
 const CARGO_CORTO: Record<string, string> = {
@@ -101,7 +104,7 @@ function DialogoDecision({
           📋 Decisión del Año {anio} · {eq.nombre}
         </DialogTitle>
         <DialogDescription className="text-zinc-400">
-          Consolidado de los borradores de las 5 áreas del comité. Las áreas sin borrador usaron valores
+          Consolidado de los borradores de las 5 áreas decididas por el REPRESENTANTE. Las áreas sin borrador usaron valores
           predeterminados y quedaron «sin trabajar».
         </DialogDescription>
       </DialogHeader>
@@ -131,7 +134,7 @@ function DialogoDecision({
                 <TableHead className="text-right text-zinc-400">Precio</TableHead>
                 <TableHead className="text-right text-zinc-400">Publicidad</TableHead>
                 <TableHead className="text-right text-zinc-400">Producción</TableHead>
-                <TableHead className="text-right text-zinc-400">Vendedores T·S·K</TableHead>
+                <TableHead className="text-right text-zinc-400">Vendedores (Tiendas · Supermercados · Kioscos)</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -209,14 +212,22 @@ function TarjetaIndustria({
   ind,
   procesando,
   aprobandoId,
+  eliminando,
+  designandoEquipoId,
   onProcesar,
   onAprobar,
+  onEliminar,
+  onDefinirRepresentante,
 }: {
   ind: ProfesorIndustria
   procesando: boolean
   aprobandoId: string | null
+  eliminando: boolean
+  designandoEquipoId: string | null
   onProcesar: (ind: ProfesorIndustria) => Promise<void>
   onAprobar: (decisionId: string, aprobada: boolean) => Promise<void>
+  onEliminar: (ind: ProfesorIndustria) => Promise<void>
+  onDefinirRepresentante: (equipoId: string, usuarioId: string) => Promise<void>
 }) {
   const [verDecision, setVerDecision] = useState<string | null>(null)
   const sinVistoBueno = ind.equipos.filter((e) => e.decisionEstado !== 'APROBADA')
@@ -238,7 +249,7 @@ function TarjetaIndustria({
             <BadgeEstadoIndustria estado={ind.estado} />
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
-            {ind.equipos.length} empresa(s) compitiendo · comités de 5 gerentes
+            {ind.equipos.length} empresa(s) compitiendo · grupos de hasta {MAX_INTEGRANTES} integrantes (con 1 representante)
           </p>
         </div>
         <div className="w-full max-w-[220px]">
@@ -262,14 +273,14 @@ function TarjetaIndustria({
       {/* Plan de eventos por año: 1-3 eventos por año, sin repetir categoría (corrección) */}
       {activa && <PlanEventos industriaId={ind.id} />}
 
-      {/* Correr simulación */}
-      <div className="mt-4">
+      {/* Correr simulación + eliminar */}
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button
               type="button"
               disabled={!activa || procesando}
-              className={`pacha-btn-game h-12 w-full bg-gradient-to-r from-amber-500 to-pink-500 text-base font-black uppercase tracking-wide text-white hover:from-amber-400 hover:to-pink-400 sm:w-auto sm:px-8 ${
+              className={`pacha-btn-game h-12 flex-1 bg-gradient-to-r from-amber-500 to-pink-500 text-base font-black uppercase tracking-wide text-white hover:from-amber-400 hover:to-pink-400 sm:flex-none sm:px-8 ${
                 activa && !procesando ? 'pacha-glow' : ''
               }`}
             >
@@ -292,8 +303,8 @@ function TarjetaIndustria({
                     {' '}
                     <b className="text-amber-300">
                       ⚠️ {sinVistoBueno.length} empresa(s) sin visto bueno ({sinVistoBueno.map((e) => e.nombre).join(', ')}
-                      ): jugarán con sus valores predeterminados y sus áreas quedarán «sin trabajar» (−10 puntos a sus
-                      gerentes).
+                      ): jugarán con sus valores predeterminados y sus áreas quedarán «sin trabajar» (el representante
+                      pierde puntos de desempeño).
                     </b>
                   </>
                 )}
@@ -312,6 +323,54 @@ function TarjetaIndustria({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* 🗑️ Eliminar simulación: los estudiantes quedan SIN DESIGNAR */}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              disabled={eliminando}
+              title="Elimina toda la simulación; los estudiantes quedarán sin designación"
+              className="h-12 border border-red-400/40 bg-red-500/15 px-4 text-xs font-black uppercase tracking-wide text-red-200 hover:bg-red-500/25"
+            >
+              {eliminando ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+              )}
+              Eliminar simulación
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent className="border-white/10 bg-[#1c1528] text-zinc-100">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="text-zinc-100">¿Eliminar «{ind.nombre}» por completo?</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-2 text-zinc-400">
+                  <p>
+                    Se borrará TODA la partida: empresas, marcas, decisiones, reportes y eventos. Esta acción no se
+                    puede deshacer.
+                  </p>
+                  <p className="font-bold text-amber-300">
+                    Los estudiantes que participan quedarán con estado «SIN DESIGNAR»: sus cuentas siguen existiendo
+                    (podrán iniciar sesión), pero no pertenecerán a ninguna empresa hasta que los asignes a una nueva
+                    simulación.
+                  </p>
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-white/10 bg-transparent text-zinc-200 hover:bg-white/10 hover:text-zinc-100">
+                Cancelar
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => void onEliminar(ind)}
+                className="bg-red-600 font-black text-white hover:bg-red-500"
+              >
+                🗑️ Sí, eliminar simulación
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_240px]">
@@ -321,7 +380,7 @@ function TarjetaIndustria({
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Empresa</TableHead>
-                <TableHead className="text-zinc-400">Comité (cargo · desempeño)</TableHead>
+                <TableHead className="text-zinc-400">Integrantes (👑 representante decide)</TableHead>
                 <TableHead className="text-right text-zinc-400">Marcas</TableHead>
                 <TableHead className="text-zinc-400">Decisión del año</TableHead>
                 <TableHead className="text-right text-zinc-400">Cuota</TableHead>
@@ -340,21 +399,48 @@ function TarjetaIndustria({
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex max-w-[260px] flex-wrap gap-1">
-                        {eq.integrantes.length === 0 && <span className="text-[11px] text-zinc-500">— sin gerentes —</span>}
+                      <div className="flex max-w-[320px] flex-wrap items-center gap-1">
+                        {eq.integrantes.length === 0 && <span className="text-[11px] text-zinc-500">— sin integrantes —</span>}
                         {eq.integrantes.map((g) => (
                           <span
                             key={g.usuarioId}
-                            title={`${CARGO_CORTO[g.cargo] ?? g.cargo} · ${g.puntos} pts`}
-                            className="rounded-md border border-white/10 bg-black/30 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-200"
+                            title={g.representante ? 'REPRESENTANTE del grupo' : `Integrante · ${g.puntos} pts`}
+                            className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
+                              g.representante
+                                ? 'border-amber-400/50 bg-amber-400/15 text-amber-100'
+                                : 'border-white/10 bg-black/30 text-zinc-200'
+                            }`}
                           >
-                            {g.nombre}
+                            {g.representante ? '👑 ' : ''}{g.nombre}
                             <span className={`ml-1 font-bold ${colorPuntos(g.puntos)}`}>
                               {g.puntos > 0 ? '+' : ''}
                               {Math.round(g.puntos)}
                             </span>
                           </span>
                         ))}
+                        {eq.integrantes.length > 1 && (
+                          <Select
+                            value={eq.integrantes.find((g) => g.representante)?.usuarioId}
+                            onValueChange={(v) => void onDefinirRepresentante(eq.id, v)}
+                            disabled={designandoEquipoId !== null}
+                          >
+                            <SelectTrigger
+                              size="sm"
+                              aria-label={`Cambiar representante de ${eq.nombre}`}
+                              title="Cambiar quién es el REPRESENTANTE del grupo"
+                              className="h-6 w-[132px] border-white/10 bg-black/40 text-[10px] text-zinc-100"
+                            >
+                              <SelectValue placeholder="👑 Cambiar representante" />
+                            </SelectTrigger>
+                            <SelectContent className="border-white/10 bg-[#1c1528] text-zinc-100">
+                              {eq.integrantes.map((g) => (
+                                <SelectItem key={g.usuarioId} value={g.usuarioId}>
+                                  {g.nombre}{g.representante ? ' (actual)' : ''}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-right text-xs font-bold text-zinc-200">{eq.numMarcas}</TableCell>
@@ -566,10 +652,11 @@ function DialogoNuevaSimulacion({
       }
       return { ...f, empresa: '' }
     })
-    // Repartir los sin empresa hacia la empresa con menos integrantes
+    // Repartir los sin empresa hacia la empresa con menos integrantes (tope 8)
     const sinAsignar = resultado.filter((f) => !f.empresa)
     for (const f of sinAsignar) {
-      const objetivo = [...empresasLista].sort((a, b) => (conteo.get(a) ?? 0) - (conteo.get(b) ?? 0))[0]
+      const objetivos = [...empresasLista].sort((a, b) => (conteo.get(a) ?? 0) - (conteo.get(b) ?? 0))
+      const objetivo = objetivos.find((e) => (conteo.get(e) ?? 0) < MAX_INTEGRANTES) ?? objetivos[0]
       f.empresa = objetivo
       conteo.set(objetivo, (conteo.get(objetivo) ?? 0) + 1)
     }
@@ -578,15 +665,24 @@ function DialogoNuevaSimulacion({
 
   function repartirTodo() {
     if (!alumnos) return
+    if (alumnos.length > empresasLista.length * MAX_INTEGRANTES) {
+      toast({
+        title: `No alcanzan las empresas`,
+        description: `${alumnos.length} alumnos superan el tope de ${empresasLista.length} × ${MAX_INTEGRANTES}. Aumenta el nº de empresas.`,
+        variant: 'destructive',
+      })
+      return
+    }
     const conteo = new Map<string, number>(empresasLista.map((e) => [e, 0]))
     const copia = alumnos.map((f) => ({ ...f, empresa: '' }))
     for (const f of copia) {
-      const objetivo = [...empresasLista].sort((a, b) => (conteo.get(a) ?? 0) - (conteo.get(b) ?? 0))[0]
+      const objetivos = [...empresasLista].sort((a, b) => (conteo.get(a) ?? 0) - (conteo.get(b) ?? 0))
+      const objetivo = objetivos.find((e) => (conteo.get(e) ?? 0) < MAX_INTEGRANTES) ?? objetivos[0]
       f.empresa = objetivo
       conteo.set(objetivo, (conteo.get(objetivo) ?? 0) + 1)
     }
     setAlumnos(copia)
-    toast({ title: '🔀 Alumnos repartidos', description: `Balanceado entre ${empresasLista.length} empresa(s).` })
+    toast({ title: '🔀 Alumnos repartidos', description: `Balanceado entre ${empresasLista.length} empresa(s), máximo ${MAX_INTEGRANTES} por empresa.` })
   }
 
   async function crear() {
@@ -605,8 +701,17 @@ function DialogoNuevaSimulacion({
     const vacia = payload.find((p) => p.integrantes.length === 0)
     if (vacia) {
       toast({
-        title: 'Hay una empresa sin gerentes',
-        description: `«${vacia.nombre}» no tiene integrantes. Reparte los alumnos o reduce el nº de empresas.`,
+        title: 'Hay una empresa sin integrantes',
+        description: `«${vacia.nombre}» no tiene alumnos. Reparte los estudiantes o reduce el nº de empresas.`,
+        variant: 'destructive',
+      })
+      return
+    }
+    const excedida = payload.find((p) => p.integrantes.length > MAX_INTEGRANTES)
+    if (excedida) {
+      toast({
+        title: `Máximo ${MAX_INTEGRANTES} integrantes por empresa`,
+        description: `«${excedida.nombre}» tiene ${excedida.integrantes.length}. Reparte de nuevo, aumenta el nº de empresas o quita alumnos.`,
         variant: 'destructive',
       })
       return
@@ -616,7 +721,7 @@ function DialogoNuevaSimulacion({
       const r = await api.crearIndustria(nombre.trim(), Math.max(1, Math.min(20, Number(periodos) || 8)), payload)
       toast({
         title: '🏭 ¡Simulación creada!',
-        description: `"${r.nombre}" lista: ${payload.length} empresa(s), ${alumnos.length} gerente(s), ${r.anioMaximo} periodo(s).`,
+        description: `"${r.nombre}" lista: ${payload.length} empresa(s), ${alumnos.length} integrante(s) (el primero de cada empresa es el REPRESENTANTE 👑), ${r.anioMaximo} periodo(s).`,
       })
       onOpenChange(false)
       setNombre('')
@@ -638,8 +743,8 @@ function DialogoNuevaSimulacion({
           <Factory className="h-4 w-4 text-pink-300" aria-hidden="true" /> Nueva simulación
         </DialogTitle>
         <DialogDescription className="text-zinc-400">
-          2 a 10 empresas compiten. Cada empresa la juega un comité de hasta 5 gerentes (alumnos) y arranca con 2
-          marcas.
+          2 a 10 empresas compiten. Cada empresa la juega un grupo de <b>1 a 8 integrantes</b> (alumnos) con un
+          <b> REPRESENTANTE</b> que toma las decisiones, y arranca con 2 marcas.
         </DialogDescription>
       </DialogHeader>
 
@@ -712,7 +817,7 @@ function DialogoNuevaSimulacion({
         <div className="rounded-xl border border-white/10 bg-black/20 p-3">
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
             <p className="flex items-center gap-1.5 text-sm font-black uppercase tracking-wide text-zinc-300">
-              <Users className="h-4 w-4" aria-hidden="true" /> Gerentes (alumnos)
+              <Users className="h-4 w-4" aria-hidden="true" /> Integrantes (alumnos)
             </p>
             <div className="flex gap-1.5">
               <Button
@@ -748,6 +853,8 @@ function DialogoNuevaSimulacion({
               />
               <p className="mt-1 text-[10px] text-zinc-500">
                 El usuario de acceso se genera del nombre (sin espacios ni tildes) y la clave inicial es <b>321</b>.
+                El <b>primer integrante de cada empresa será el REPRESENTANTE 👑</b> (podrás cambiarlo después desde la
+                tabla de empresas); el máximo por empresa es <b>{MAX_INTEGRANTES}</b>.
               </p>
             </>
           ) : (
@@ -876,6 +983,8 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
   const [creando, setCreando] = useState(false)
   const [procesandoId, setProcesandoId] = useState<string | null>(null)
   const [aprobandoId, setAprobandoId] = useState<string | null>(null)
+  const [eliminandoId, setEliminandoId] = useState<string | null>(null)
+  const [designandoEquipoId, setDesignandoEquipoId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -933,6 +1042,40 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
     }
   }
 
+  /** 🗑️ Elimina la simulación; los estudiantes quedan SIN DESIGNAR. */
+  async function eliminar(ind: ProfesorIndustria) {
+    setEliminandoId(ind.id)
+    try {
+      const r = await api.eliminarIndustria(ind.id)
+      toast({
+        title: '🗑️ Simulación eliminada',
+        description: `«${ind.nombre}» se borró junto con ${r.equiposEliminados} empresa(s). Los estudiantes quedaron SIN DESIGNAR: sus cuentas siguen activas y verán ese estado al entrar.`,
+      })
+      await refresh()
+    } catch (e) {
+      toast({ title: 'No se pudo eliminar', description: msg(e), variant: 'destructive' })
+    } finally {
+      setEliminandoId(null)
+    }
+  }
+
+  /** 👑 Designa (o cambia) al REPRESENTANTE de una empresa. */
+  async function definirRepresentante(equipoId: string, usuarioId: string) {
+    setDesignandoEquipoId(equipoId)
+    try {
+      const r = await api.definirRepresentante(equipoId, usuarioId)
+      toast({
+        title: '👑 Nuevo representante designado',
+        description: `${r.representante} será el único integrante que tome y envíe las decisiones del grupo.`,
+      })
+      await refresh()
+    } catch (e) {
+      toast({ title: 'No se pudo designar', description: msg(e), variant: 'destructive' })
+    } finally {
+      setDesignandoEquipoId(null)
+    }
+  }
+
   if (cargando) return <SplashCarga />
 
   if (error) {
@@ -980,7 +1123,7 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
             <div>
               <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">🎮 Tus simulaciones</h2>
               <p className="mt-0.5 text-sm text-zinc-400">
-                Crea industrias con comités de gerentes, revisa las decisiones, da el visto bueno y corre cada año.
+                Crea industrias con grupos de hasta 8 integrantes (el REPRESENTANTE decide), revisa las decisiones, da el visto bueno, corre cada año o elimina la simulación.
               </p>
             </div>
             <Dialog open={abrirNueva} onOpenChange={setAbrirNueva}>
@@ -1008,8 +1151,12 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
                   ind={ind}
                   procesando={procesandoId === ind.id}
                   aprobandoId={aprobandoId}
+                  eliminando={eliminandoId === ind.id}
+                  designandoEquipoId={designandoEquipoId}
                   onProcesar={procesar}
                   onAprobar={aprobar}
+                  onEliminar={eliminar}
+                  onDefinirRepresentante={definirRepresentante}
                 />
               ))}
             </div>

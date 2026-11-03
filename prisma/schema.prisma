@@ -68,14 +68,17 @@ model Equipo {
   permisosArea   PermisoArea[]
 }
 
-// Un gerente (alumno) dentro de la empresa, con su cargo y puntos de desempeño
+// Un integrante (alumno) dentro de la empresa. Todos consultan todos los
+// reportes y datos contables del equipo; SOLO el REPRESENTANTE toma las
+// decisiones del año (envía borradores, envía la decisión y registra sanciones).
 model Membresia {
   id        String   @id @default(cuid())
   equipoId  String
   equipo    Equipo   @relation(fields: [equipoId], references: [id])
   usuarioId String
   usuario   Usuario  @relation(fields: [usuarioId], references: [id])
-  cargo     String // precios | publicidad | produccion | ventas | investigacion
+  cargo     String @default("colaborador") // histórico: antes cada alumno tenía un cargo del comité
+  representante Boolean @default(false) // 👑 único integrante que toma las decisiones
   puntos    Float    @default(0) // puntos de desempeño
   createdAt DateTime @default(now())
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { CheckCircle2, Loader2, Lock, LockOpen, Plus, Rocket, Send, ShieldCheck, X } from 'lucide-react'
+import { CheckCircle2, Loader2, Lock, Plus, Rocket, Send, ShieldCheck, X } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import {
   api,
@@ -32,8 +32,9 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
-const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + 'k u'
+/** Cifras completas en la decisión: "Bs 2.525 mil" (sin abreviar a 2.5k). */
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
+const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
 
 const SLIDER_CLS =
@@ -45,7 +46,7 @@ const RANGO_PRODUCCION = { min: 0, max: 5000, step: 25 } as const
 const MAX_VENDEDORES = [60, 40, 24] // Tiendas · Supermercados · Kioscos
 
 const AYUDA_PRECIO = 'Ideal de segmentos: Niños 5 · Familias 6.5 · Adolescentes 7 · Jóvenes 9 · Adultos 14'
-const AYUDA_PUBLICIDAD = 'Más publicidad = más awareness, con retornos decrecientes'
+const AYUDA_PUBLICIDAD = 'Más publicidad = más conocimiento de marca (awareness), con retornos decrecientes'
 const AYUDA_PRODUCCION = 'Si te quedas corto, pierdes ventas por quiebre de stock'
 
 function normalizarVendedores(v: number[] | undefined): number[] {
@@ -212,36 +213,31 @@ function VendedoresControl({
   )
 }
 
-/* ============ Tarjeta de área (cargo del comité) ============ */
+/* ============ Tarjeta de área de la decisión ============ */
 
 function AreaCard({
   cargo,
-  responsable,
   enviadoPor,
   bloqueada,
-  bloqueadaPara,
-  permisoAbierto,
+  /** Modo consulta: solo el REPRESENTANTE edita; el resto del grupo ve los datos. */
+  modoConsulta,
   children,
   onEnviar,
   enviando,
 }: {
   cargo: { id: string; nombre: string; emoji: string; descripcion: string }
-  responsable?: { nombre: string; puntos: number }
   enviadoPor?: string
   bloqueada: boolean
-  /** El alumno actual NO puede trabajar esta área (no es su cargo y sin permiso). */
-  bloqueadaPara?: boolean
-  permisoAbierto?: boolean
+  modoConsulta?: boolean
   children: React.ReactNode
   onEnviar: () => Promise<void>
   enviando: boolean
 }) {
   const enviado = Boolean(enviadoPor)
-  const cerrada = Boolean(bloqueadaPara) && !bloqueada
   return (
     <section
       aria-label={`Área ${cargo.nombre}`}
-      className={`pacha-panel p-4 sm:p-5 ${cerrada ? 'opacity-90 ring-1 ring-white/10' : ''}`}
+      className={`pacha-panel p-4 sm:p-5 ${modoConsulta ? 'opacity-95' : ''}`}
     >
       <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/10 pb-3">
         <div className="min-w-0">
@@ -252,18 +248,9 @@ function AreaCard({
           <p className="mt-0.5 text-[11px] text-zinc-500">{cargo.descripcion}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          {responsable && (
-            <Badge variant="outline" className="border-white/15 text-[10px] text-zinc-300">
-              👤 {responsable.nombre}
-            </Badge>
-          )}
-          {cerrada ? (
-            <Badge className="border border-amber-400/40 bg-amber-400/10 text-[10px] font-bold text-amber-300">
-              <Lock className="mr-1 h-3 w-3" aria-hidden="true" /> Área bloqueada
-            </Badge>
-          ) : permisoAbierto ? (
-            <Badge className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
-              <LockOpen className="mr-1 h-3 w-3" aria-hidden="true" /> Equipo con acceso
+          {modoConsulta && !bloqueada ? (
+            <Badge className="border border-sky-400/40 bg-sky-400/10 text-[10px] font-bold text-sky-300">
+              👁️ Consulta · decide el representante
             </Badge>
           ) : null}
           {enviado ? (
@@ -274,10 +261,10 @@ function AreaCard({
             <Badge className="border border-zinc-400/30 bg-zinc-400/10 text-[10px] text-zinc-300">
               Sin borrador · valores predeterminados
             </Badge>
-          ) : cerrada ? null : (
+          ) : (
             <Badge className="border border-red-400/40 bg-red-400/10 text-[10px] text-red-300">⚠️ Sin trabajar</Badge>
           )}
-          {!bloqueada && !cerrada && (
+          {!bloqueada && !modoConsulta && (
             <Button
               type="button"
               size="sm"
@@ -290,21 +277,14 @@ function AreaCard({
               ) : (
                 <Send className="h-3.5 w-3.5" aria-hidden="true" />
               )}
-              {enviado ? 'Actualizar borrador' : 'Enviar borrador del área'}
+              {enviado ? 'Actualizar borrador' : 'Guardar borrador del área'}
             </Button>
           )}
         </div>
       </div>
-      {cerrada ? (
-        <div className="rounded-xl border border-amber-400/30 bg-amber-400/5 px-4 py-4 text-center">
-          <p className="text-2xl" aria-hidden="true">🔒</p>
-          <p className="mt-1 text-xs font-bold text-amber-200">
-            Área bloqueada — la trabaja {responsable?.nombre ?? 'su gerente'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-zinc-400">
-            {responsable?.nombre ?? 'El gerente'} puede abrir el acceso desde «Mi área» si quieren colaborar.
-            Lo decidido por esta área se revisa en el <b>Comité</b>.
-          </p>
+      {modoConsulta && !bloqueada ? (
+        <div className="pointer-events-none select-none opacity-80">
+          {children}
         </div>
       ) : (
         children
@@ -318,25 +298,18 @@ function AreaCard({
 export function AlumnoDecisiones({
   estado,
   refresh,
-  soloMiArea = false,
 }: {
   estado: AlumnoEstado
   refresh: () => Promise<void> | void
-  /** Modo «Mi área»: muestra solo el editor del cargo del alumno, sin la barra de envío del comité. */
-  soloMiArea?: boolean
 }) {
   const anio = estado.industria.anioActual
   const decisionEstado = estado.decision?.estado ?? null
   const bloqueada = decisionEstado === 'ENVIADA' || decisionEstado === 'APROBADA'
 
-  // Corrección: cada área está bloqueada por defecto. Solo puede trabajarla su
-  // gerente responsable, o cualquiera si el encargado abrió el permiso de su área.
-  const miCargo = estado.membresia?.cargo ?? null
-  const permisoAbiertoDe = useMemo(
-    () => new Map(estado.permisos.map((p) => [p.cargo, p.abierto])),
-    [estado.permisos]
-  )
-  const puedeTrabajar = (cargoId: string) => cargoId === miCargo || (permisoAbiertoDe.get(cargoId) ?? false)
+  // Nuevo modelo: todos los integrantes VEN todas las áreas y todos los datos;
+  // SOLO el REPRESENTANTE edita y envía las decisiones.
+  const esRepresentante = estado.membresia?.esRepresentante ?? false
+  const modoConsulta = !esRepresentante && !bloqueada
 
   // Borrador local; se reconstruye si cambia el año, la decisión o algún borrador de área.
   const claveBorrador = `${anio}:${decisionEstado ?? 'sin-decision'}:${estado.borradores.map((b) => b.updatedAt).join(',')}`
@@ -354,10 +327,6 @@ export function AlumnoDecisiones({
   const borradorDe = useMemo(
     () => new Map(estado.borradores.map((b) => [b.cargo, b])),
     [estado.borradores]
-  )
-  const gerenteDe = useMemo(
-    () => new Map(estado.comite.map((g) => [g.cargo, g])),
-    [estado.comite]
   )
 
   const aprobados = useMemo(
@@ -533,7 +502,7 @@ export function AlumnoDecisiones({
                     <dd className="font-bold text-zinc-100">{fmtU(v?.produccion ?? m.produccion)}</dd>
                   </div>
                   <div className="rounded-lg bg-black/30 px-2.5 py-1.5">
-                    <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Vendedores T·S·K</dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Vendedores (Tiendas · Supermercados · Kioscos)</dt>
                     <dd className="font-bold text-zinc-100">
                       {normalizarVendedores(v?.vendedores ?? m.vendedores).join(' · ')}
                     </dd>
@@ -543,7 +512,7 @@ export function AlumnoDecisiones({
                     <dd className="font-bold text-amber-300">{fmtBs(fuerzaVentas(v?.vendedores ?? m.vendedores))}</dd>
                   </div>
                   <div className="rounded-lg bg-black/30 px-2.5 py-1.5">
-                    <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Awareness</dt>
+                    <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Conocimiento de marca (awareness)</dt>
                     <dd className="font-bold text-pink-300">{Math.round(m.awareness * 100)}%</dd>
                   </div>
                 </dl>
@@ -568,7 +537,7 @@ export function AlumnoDecisiones({
                   <dd className="font-bold text-zinc-100">{fmtU(n.produccion)}</dd>
                 </div>
                 <div className="rounded-lg bg-black/30 px-2.5 py-1.5">
-                  <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Vendedores T·S·K</dt>
+                  <dt className="text-[10px] uppercase tracking-wide text-zinc-500">Vendedores (Tiendas · Supermercados · Kioscos)</dt>
                   <dd className="font-bold text-zinc-100">{normalizarVendedores(n.vendedores).join(' · ')}</dd>
                 </div>
                 <div className="rounded-lg bg-black/30 px-2.5 py-1.5">
@@ -608,21 +577,18 @@ export function AlumnoDecisiones({
     )
   }
 
-  /* ---------- Vista editable (por áreas del comité) ---------- */
+  /* ---------- Vista editable (por áreas de la decisión) ---------- */
   const tarjetas = (
     <>
       {/* 💰 ÁREA PRECIOS */}
-      {(!soloMiArea || miCargo === 'precios') && (
-        <AreaCard
-          cargo={cargos.find((c) => c.id === 'precios')!}
-          responsable={gerenteDe.get('precios')}
-          enviadoPor={borradorDe.get('precios')?.enviadoPor}
-          bloqueada={bloqueada}
-          bloqueadaPara={!puedeTrabajar('precios')}
-          permisoAbierto={permisoAbiertoDe.get('precios')}
-          enviando={enviandoCargo === 'precios'}
-          onEnviar={() => enviarArea('precios')}
-        >
+      <AreaCard
+        cargo={cargos.find((c) => c.id === 'precios')!}
+        enviadoPor={borradorDe.get('precios')?.enviadoPor}
+        bloqueada={bloqueada}
+        modoConsulta={modoConsulta}
+        enviando={enviandoCargo === 'precios'}
+        onEnviar={() => enviarArea('precios')}
+      >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
             const v = contenido.marcas.find((x) => x.marcaId === m.id)
@@ -650,20 +616,16 @@ export function AlumnoDecisiones({
           })}
         </div>
       </AreaCard>
-      )}
 
       {/* 📺 ÁREA PUBLICIDAD */}
-      {(!soloMiArea || miCargo === 'publicidad') && (
-        <AreaCard
-          cargo={cargos.find((c) => c.id === 'publicidad')!}
-          responsable={gerenteDe.get('publicidad')}
-          enviadoPor={borradorDe.get('publicidad')?.enviadoPor}
-          bloqueada={bloqueada}
-          bloqueadaPara={!puedeTrabajar('publicidad')}
-          permisoAbierto={permisoAbiertoDe.get('publicidad')}
-          enviando={enviandoCargo === 'publicidad'}
-          onEnviar={() => enviarArea('publicidad')}
-        >
+      <AreaCard
+        cargo={cargos.find((c) => c.id === 'publicidad')!}
+        enviadoPor={borradorDe.get('publicidad')?.enviadoPor}
+        bloqueada={bloqueada}
+        modoConsulta={modoConsulta}
+        enviando={enviandoCargo === 'publicidad'}
+        onEnviar={() => enviarArea('publicidad')}
+      >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
             const v = contenido.marcas.find((x) => x.marcaId === m.id)
@@ -674,7 +636,7 @@ export function AlumnoDecisiones({
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h4 className="text-sm font-black text-zinc-100">🍨 {m.nombre}</h4>
                   <span className="text-[11px] text-zinc-500">
-                    📣 Awareness actual: <b className="text-pink-300">{awareness}%</b>
+                    📣 Conocimiento de marca (awareness) actual: <b className="text-pink-300">{awareness}%</b>
                   </span>
                 </div>
                 <SliderControl
@@ -692,20 +654,16 @@ export function AlumnoDecisiones({
           })}
         </div>
       </AreaCard>
-      )}
 
       {/* 🏭 ÁREA PRODUCCIÓN */}
-      {(!soloMiArea || miCargo === 'produccion') && (
-        <AreaCard
-          cargo={cargos.find((c) => c.id === 'produccion')!}
-          responsable={gerenteDe.get('produccion')}
-          enviadoPor={borradorDe.get('produccion')?.enviadoPor}
-          bloqueada={bloqueada}
-          bloqueadaPara={!puedeTrabajar('produccion')}
-          permisoAbierto={permisoAbiertoDe.get('produccion')}
-          enviando={enviandoCargo === 'produccion'}
-          onEnviar={() => enviarArea('produccion')}
-        >
+      <AreaCard
+        cargo={cargos.find((c) => c.id === 'produccion')!}
+        enviadoPor={borradorDe.get('produccion')?.enviadoPor}
+        bloqueada={bloqueada}
+        modoConsulta={modoConsulta}
+        enviando={enviandoCargo === 'produccion'}
+        onEnviar={() => enviarArea('produccion')}
+      >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
             const v = contenido.marcas.find((x) => x.marcaId === m.id)
@@ -752,20 +710,16 @@ export function AlumnoDecisiones({
           />
         </div>
       </AreaCard>
-      )}
 
       {/* 🚚 ÁREA DISTRIBUCIÓN Y VENTAS */}
-      {(!soloMiArea || miCargo === 'ventas') && (
-        <AreaCard
-          cargo={cargos.find((c) => c.id === 'ventas')!}
-          responsable={gerenteDe.get('ventas')}
-          enviadoPor={borradorDe.get('ventas')?.enviadoPor}
-          bloqueada={bloqueada}
-          bloqueadaPara={!puedeTrabajar('ventas')}
-          permisoAbierto={permisoAbiertoDe.get('ventas')}
-          enviando={enviandoCargo === 'ventas'}
-          onEnviar={() => enviarArea('ventas')}
-        >
+      <AreaCard
+        cargo={cargos.find((c) => c.id === 'ventas')!}
+        enviadoPor={borradorDe.get('ventas')?.enviadoPor}
+        bloqueada={bloqueada}
+        modoConsulta={modoConsulta}
+        enviando={enviandoCargo === 'ventas'}
+        onEnviar={() => enviarArea('ventas')}
+      >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
             const v = contenido.marcas.find((x) => x.marcaId === m.id)
@@ -783,20 +737,16 @@ export function AlumnoDecisiones({
           })}
         </div>
       </AreaCard>
-      )}
 
       {/* 🔬 ÁREA INVESTIGACIÓN Y DESARROLLO */}
-      {(!soloMiArea || miCargo === 'investigacion') && (
-        <AreaCard
-          cargo={cargos.find((c) => c.id === 'investigacion')!}
-          responsable={gerenteDe.get('investigacion')}
-          enviadoPor={borradorDe.get('investigacion')?.enviadoPor}
-          bloqueada={bloqueada}
-          bloqueadaPara={!puedeTrabajar('investigacion')}
-          permisoAbierto={permisoAbiertoDe.get('investigacion')}
-          enviando={enviandoCargo === 'investigacion'}
-          onEnviar={() => enviarArea('investigacion')}
-        >
+      <AreaCard
+        cargo={cargos.find((c) => c.id === 'investigacion')!}
+        enviadoPor={borradorDe.get('investigacion')?.enviadoPor}
+        bloqueada={bloqueada}
+        modoConsulta={modoConsulta}
+        enviando={enviandoCargo === 'investigacion'}
+        onEnviar={() => enviarArea('investigacion')}
+      >
         <div className="space-y-4">
           {/* Estudios de mercado */}
           <div>
@@ -892,32 +842,34 @@ export function AlumnoDecisiones({
           </div>
         </div>
       </AreaCard>
-      )}
     </>
   )
 
-  /* ---------- Modo «Mi área»: solo el editor del propio cargo ---------- */
-  if (soloMiArea) {
-    return <div className="space-y-4">{tarjetas}</div>
-  }
-
-  /* ---------- Vista editable (por áreas del comité) ---------- */
+  /* ---------- Vista editable (solo el representante decide; todos consultan) ---------- */
   return (
     <div className="space-y-5 pb-4">
       <div>
         <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">
           🎯 Decisiones del Año <span className="pacha-title-shine">{anio}</span>
         </h2>
-        <p className="mt-0.5 text-sm text-zinc-400">
-          Cada área envía su borrador al comité. Las áreas están <b>bloqueadas</b>: solo puede trabajarlas su gerente
-          responsable, salvo que este abra el permiso desde «Mi área». Lo decidido por cada área se revisa en el
-          Comité. Al final, el comité envía la decisión del año al docente.
-        </p>
+        {esRepresentante ? (
+          <p className="mt-0.5 text-sm text-zinc-400">
+            👑 Eres el <b className="text-amber-300">REPRESENTANTE</b> del grupo: define las 5 áreas con tus
+            compañeros, guarda cada borrador y envía la decisión del año al docente. Todos los integrantes pueden
+            ver y analizar estos números.
+          </p>
+        ) : (
+          <p className="mt-0.5 text-sm text-zinc-400">
+            👁️ Todo el grupo puede <b>consultar</b> estas decisiones y analizar los números, pero solo el
+            <b className="text-amber-300"> REPRESENTANTE</b>{' '}
+            {estado.comite.find((g) => g.representante)?.nombre ?? 'del grupo'} puede editarlas y enviarlas.
+          </p>
+        )}
       </div>
 
       {tarjetas}
 
-      {/* Barra sticky de inversión + envío final del comité */}
+      {/* Barra sticky de inversión + envío final (solo representante) */}
       <div className="sticky bottom-0 z-20 -mx-3 mt-2 border-t border-white/10 bg-[#140f1c]/90 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -927,11 +879,16 @@ export function AlumnoDecisiones({
             <p className="text-xl font-black text-amber-300">{fmtBs(inversion)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {cargosSinEnviar.length > 0 && !bloqueada && (
+            {!bloqueada && cargosSinEnviar.length > 0 && (
               <span className="text-[11px] font-semibold text-red-300">
                 ⚠️ {cargosSinEnviar.length} área(s) sin borrador: {cargosSinEnviar.map((c) => c.corto).join(', ')}
               </span>
             )}
+            {!esRepresentante ? (
+              <span className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-[11px] font-bold text-sky-300">
+                👁️ Modo consulta: el representante envía la decisión del año
+              </span>
+            ) : (
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
@@ -954,8 +911,8 @@ export function AlumnoDecisiones({
                     <div className="space-y-2 text-zinc-400">
                       <p>
                         Se consolidan los borradores de las 5 áreas. Las áreas sin borrador usarán los valores
-                        predeterminados y quedarán <b className="text-red-300">sin trabajar</b> (sus gerentes perderán
-                        puntos de desempeño).
+                        predeterminados y quedarán <b className="text-red-300">sin trabajar</b> (el representante
+                        perderá puntos de desempeño).
                       </p>
                       <ul className="space-y-1">
                         {cargos.map((cg) => {
@@ -970,7 +927,7 @@ export function AlumnoDecisiones({
                               <span>
                                 {cg.emoji} {cg.nombre} —{' '}
                                 {enviada
-                                  ? `borrador de ${borradorDe.get(cg.id)?.enviadoPor}`
+                                  ? `borrador guardado por ${borradorDe.get(cg.id)?.enviadoPor}`
                                   : 'sin trabajar (predeterminado)'}
                               </span>
                             </li>
@@ -996,6 +953,7 @@ export function AlumnoDecisiones({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
+            )}
           </div>
         </div>
       </div>

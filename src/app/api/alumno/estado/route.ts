@@ -1,11 +1,11 @@
 import { db } from '@/lib/db'
 import { error, ok } from '@/lib/pacha/api-helpers'
 import { requireRol } from '@/lib/pacha/auth'
-import { parseDecision, parseJson, PachaError } from '@/lib/pacha/tipos'
+import { parseDecision, parseJson } from '@/lib/pacha/tipos'
 import { rankingIndustria } from '@/lib/pacha/simulacion'
 import { CARGOS, DESEMPENO, ESTUDIOS, ID_CONFIG, presupuestoNormal, probabilidadExito } from '@/lib/pacha/catalogo'
 
-/** Estado completo de juego del alumno (HUD + comité + borradores + datos de todas las pestañas). */
+/** Estado completo de juego del alumno (HUD + decisión + reportes + datos de todas las pestañas). */
 export async function GET() {
   try {
     const usuario = await requireRol('ALUMNO')
@@ -15,12 +15,14 @@ export async function GET() {
       include: { equipo: { include: { industria: true } } },
     })
     if (!membresia) {
-      throw new PachaError('No perteneces a ninguna empresa todavía. Pide al profesor que te asigne a una.', 404)
+      // SIN DESIGNAR: la cuenta existe, pero el estudiante todavía no fue
+      // asignado a ninguna empresa (o su simulación fue eliminada por el docente).
+      return ok({ usuario, designado: false })
     }
     const equipo = membresia.equipo
     const anio = equipo.industria.anioActual
 
-    const [marcas, decision, proyectos, reportes, compras, ranking, comite, borradores, penalizaciones, permisos, eventosPeriodo, marcasHistoria] = await Promise.all([
+    const [marcas, decision, proyectos, reportes, compras, ranking, comite, borradores, penalizaciones, eventosPeriodo, marcasHistoria] = await Promise.all([
       db.marca.findMany({ where: { equipoId: equipo.id }, orderBy: { anioLanzamiento: 'asc' } }),
       db.decision.findUnique({ where: { equipoId_anio: { equipoId: equipo.id, anio } } }),
       db.proyectoID.findMany({ where: { equipoId: equipo.id }, orderBy: { anioInicio: 'asc' } }),
@@ -45,7 +47,6 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         take: 30,
       }),
-      db.permisoArea.findMany({ where: { equipoId: equipo.id } }),
       // Eventos que ocurren (u ocurrieron) DENTRO de esta simulación, por año,
       // con sus propiedades (categoría, región, meses, efectos) — doc §15.
       db.eventoPeriodo.findMany({
@@ -65,7 +66,8 @@ export async function GET() {
 
     return ok({
       usuario,
-      membresia: { cargo: membresia.cargo, puntos: membresia.puntos },
+      designado: true,
+      membresia: { cargo: membresia.cargo, puntos: membresia.puntos, esRepresentante: membresia.representante },
       equipo: { id: equipo.id, nombre: equipo.nombre, color: equipo.color },
       industria: {
         id: equipo.industria.id,
@@ -94,6 +96,7 @@ export async function GET() {
         usuarioId: m.usuario.id,
         nombre: m.usuario.nombre,
         cargo: m.cargo,
+        representante: m.representante,
         puntos: m.puntos,
       })),
       borradores: borradores
@@ -152,9 +155,7 @@ export async function GET() {
       })),
       costoEstudiosAnio,
       ranking,
-      config: { id: ID_CONFIG, catalogoEstudios: ESTUDIOS },
-      // Permisos de área: qué áreas abrió el encargado al resto del equipo
-      permisos: permisos.map((p) => ({ cargo: p.cargo, abierto: p.abierto })),
+      config: { id: ID_CONFIG, catalogoEstudios: ESTUDIOS, maxIntegrantes: 8 },
       // Eventos de la simulación por año, con sus propiedades (doc §15)
       eventos: eventosPeriodo.map((e) => ({
         anio: e.anio,

@@ -1,10 +1,10 @@
 // ============================================================
 // PACHA Simulador · Servicio de simulación (BOLIVIA)
-// El "corazón" del sistema: empresas con comité de 5 gerentes,
-// borradores por área, visto bueno del docente y procesamiento del
-// periodo con el entorno nacional: eventos de Bolivia e inflación
-// (doc §10, §15, §18). Configuración congelada por industria,
-// compatible con simulaciones ya creadas.
+// El "corazón" del sistema: empresas con grupos de hasta 8 integrantes,
+// borradores por área decididos SOLO por el REPRESENTANTE del grupo,
+// visto bueno del docente y procesamiento del periodo con el entorno
+// nacional: eventos de Bolivia e inflación (doc §10, §15, §18).
+// Configuración congelada por industria, compatible con simulaciones ya creadas.
 // ============================================================
 
 import { db } from '@/lib/db'
@@ -29,6 +29,8 @@ import {
 } from './tipos'
 
 const CLAVE_DEMO = '321'
+/** Máximo de integrantes (alumnos) por empresa. */
+export const MAX_INTEGRANTES = 8
 
 interface PlantillaMarca {
   tipo: 'agua' | 'crema'
@@ -67,7 +69,8 @@ export interface CrearIndustriaOpts {
  * Crea una industria nueva:
  * · 2 a 10 empresas que compiten (por defecto, las 5 bolivianas: Delizia,
  *   PIL Andina, Frigo, Panda y Cabrera), cada una con 2 marcas (agua + crema)
- * · hasta 5 gerentes (alumnos) por empresa formando el Comité de Dirección de Marketing
+ * · hasta 8 integrantes (alumnos) por empresa; el primero es el REPRESENTANTE,
+ *   único integrante que toma las decisiones del grupo
  * · nº de periodos configurable por el docente (doc: Años 1 a 10)
  * · configuración de Bolivia congelada (configJson) y semilla de eventos
  * · historia del mercado: reportes de los 3 años anteriores al Año 1 (Años -2, -1 y 0)
@@ -77,6 +80,11 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
   const empresas = (opts.empresas ?? []).filter((e) => e.nombre?.trim())
   if (empresas.length < 2) throw new PachaError('Se necesitan al menos 2 empresas que compitan')
   if (empresas.length > 10) throw new PachaError('El máximo son 10 empresas')
+  for (const e of empresas) {
+    if ((e.integrantes?.length ?? 0) > MAX_INTEGRANTES) {
+      throw new PachaError(`«${e.nombre}» tiene ${e.integrantes.length} integrantes: el máximo por empresa es ${MAX_INTEGRANTES}`)
+    }
+  }
 
   const validacion = validarConfiguracion()
   if (!validacion.ok) throw new PachaError(`Configuración de Bolivia inválida: ${validacion.errores.join('; ')}`)
@@ -130,7 +138,8 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
       })
     }
 
-    // Gerentes del comité: cada integrante toma uno de los 5 cargos (cíclico si sobran)
+    // Integrantes del grupo: SIN cargos individuales. Todos consultan todos los
+    // reportes y datos; solo el REPRESENTANTE (el primero de la lista) decide.
     for (let j = 0; j < emp.integrantes.length; j++) {
       const integ = emp.integrantes[j]
       const usuarioNombre = slugUsuario(integ.usuario || integ.nombre || '')
@@ -140,9 +149,14 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
       if (ocupado) {
         throw new PachaError(`${usuario.nombre} ya pertenece a la empresa «${ocupado.equipo.nombre}»`)
       }
-      const cargo = CARGOS[j % CARGOS.length].id
       await db.membresia.create({
-        data: { equipoId: equipo.id, usuarioId: usuario.id, cargo, puntos: DESEMPENO.puntosIniciales },
+        data: {
+          equipoId: equipo.id,
+          usuarioId: usuario.id,
+          cargo: j === 0 ? 'representante' : 'colaborador',
+          representante: j === 0,
+          puntos: DESEMPENO.puntosIniciales,
+        },
       })
     }
   }
@@ -174,6 +188,51 @@ async function obtenerOCrearAlumno(usuarioNombre: string) {
   return db.usuario.create({
     data: { nombre: usuarioNombre, passwordHash: hashPassword(CLAVE_DEMO), rol: 'ALUMNO' },
   })
+}
+
+/**
+ * ELIMINA una simulación completa (solo el docente dueño puede hacerlo).
+ * Borra todos los datos de juego en orden de dependencias y deja a los
+ * estudiantes SIN DESIGNACIÓN: sus cuentas siguen existiendo (pueden iniciar
+ * sesión) pero ya no pertenecen a ninguna empresa y verán su estado
+ * «Sin designar» hasta que el docente los asigne a otra simulación.
+ */
+export async function eliminarIndustria(industriaId: string, profesorId: string) {
+  const industria = await db.industria.findUnique({
+    where: { id: industriaId },
+    include: { equipos: { select: { id: true } } },
+  })
+  if (!industria) throw new PachaError('Simulación no encontrada', 404)
+  if (industria.profesorId !== profesorId) throw new PachaError('No es tu simulación', 403)
+
+  const equipoIds = industria.equipos.map((e) => e.id)
+
+  await db.$transaction(async (tx) => {
+    if (equipoIds.length > 0) {
+      // 1) Datos dependientes de Reporte y Equipo
+      await tx.reporteMarca.deleteMany({ where: { reporte: { equipoId: { in: equipoIds } } } })
+      await tx.reporte.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.compraEstudio.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.proyectoID.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.penalizacion.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.borradorArea.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.permisoArea.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.decision.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      await tx.marca.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      // 2) Membresías: los alumnos quedan SIN designación (la cuenta se conserva)
+      await tx.membresia.deleteMany({ where: { equipoId: { in: equipoIds } } })
+      // 3) Empresas
+      await tx.equipo.deleteMany({ where: { industriaId } })
+    }
+    // 4) Entorno nacional de la simulación
+    await tx.eventoPlan.deleteMany({ where: { industriaId } })
+    await tx.eventoPeriodo.deleteMany({ where: { industriaId } })
+    await tx.macroPeriodo.deleteMany({ where: { industriaId } })
+    // 5) La simulación misma
+    await tx.industria.delete({ where: { id: industriaId } })
+  })
+
+  return { ok: true, equiposEliminados: equipoIds.length }
 }
 
 /** Config de la industria (creada con valores de Bolivia si falta — compatibilidad). */
@@ -922,17 +981,19 @@ export async function procesarRonda(industriaId: string) {
   // 7) Evaluar proyectos I+D iniciados este año (sorteo determinista)
   await evaluarProyectos(industria.id, anio)
 
-  // 8) Puntos de desempeño: área con borrador enviado = trabajó (+5); sin borrador = sin trabajar (−10)
+  // 8) Puntos de desempeño: los decide el REPRESENTANTE del grupo. Por cada área
+  //    con borrador enviado gana +5; por cada área sin borrador pierde −10.
   const borradores = await db.borradorArea.findMany({ where: { equipoId: { in: equipoIds }, anio, enviado: true } })
   const trabajados = new Set(borradores.map((b) => `${b.equipoId}|${b.cargo}`))
   for (const equipo of industria.equipos) {
+    const representante = equipo.membresias.find((m) => m.representante)
+    if (!representante) continue
+    let delta = 0
     for (const cargo of CARGOS) {
-      const responsables = equipo.membresias.filter((m) => m.cargo === cargo.id)
-      if (responsables.length === 0) continue
-      const delta = trabajados.has(`${equipo.id}|${cargo.id}`) ? DESEMPENO.premioTrabajar : DESEMPENO.penalizacionSinTrabajar
-      for (const m of responsables) {
-        await db.membresia.update({ where: { id: m.id }, data: { puntos: round2(m.puntos + delta) } })
-      }
+      delta += trabajados.has(`${equipo.id}|${cargo.id}`) ? DESEMPENO.premioTrabajar : DESEMPENO.penalizacionSinTrabajar
+    }
+    if (delta !== 0) {
+      await db.membresia.update({ where: { id: representante.id }, data: { puntos: round2(representante.puntos + delta) } })
     }
   }
 
@@ -1048,48 +1109,50 @@ function contextoEquipo(equipoId: string) {
 }
 
 /**
- * Verifica que el alumno pueda trabajar en UNA área del comité:
- *  · siempre puede su gerente responsable (su cargo en la Membresía), o
- *  · cualquier integrante si el encargado del área abrió el permiso (PermisoArea.abierto).
- *  Si no, lanza error «Área bloqueada».
+ * ¿Es este usuario el REPRESENTANTE del grupo (el único que toma decisiones)?
  */
-async function autorizarArea(equipoId: string, usuarioId: string, cargo: string) {
+export async function esRepresentante(equipoId: string, usuarioId: string): Promise<boolean> {
   const membresia = await db.membresia.findUnique({ where: { equipoId_usuarioId: { equipoId, usuarioId } } })
-  if (!membresia) throw new PachaError('No eres gerente de esta empresa', 403)
-  if (membresia.cargo === cargo) return
-  const permiso = await db.permisoArea.findUnique({ where: { equipoId_cargo: { equipoId, cargo } } })
-  if (!permiso?.abierto) {
-    const encargado = await db.membresia.findFirst({
-      where: { equipoId, cargo },
-      include: { usuario: { select: { nombre: true } } },
-    })
+  if (!membresia) throw new PachaError('No eres integrante de esta empresa', 403)
+  return membresia.representante
+}
+
+/** Exige que el usuario sea el REPRESENTANTE del grupo para tomar decisiones. */
+async function requireRepresentante(equipoId: string, usuarioId: string) {
+  const ok = await esRepresentante(equipoId, usuarioId)
+  if (!ok) {
     throw new PachaError(
-      `Área bloqueada: solo ${encargado?.usuario.nombre ?? 'su gerente'} puede trabajarla hasta que te dé permiso`,
+      'Solo el REPRESENTANTE del grupo puede tomar y enviar las decisiones (todos los integrantes pueden consultar los reportes y datos)',
       403
     )
   }
 }
 
 /**
- * El gerente responsable de un área abre o cierra el acceso del equipo a su área.
- * Solo el encargado actual del cargo puede cambiarlo.
+ * El docente designa (o cambia) al REPRESENTANTE de una empresa.
+ * El representante es el único integrante que toma y envía las decisiones.
  */
-export async function cambiarPermisoArea(equipoId: string, usuarioId: string, cargo: string, abierto: boolean) {
-  if (!esCargoValido(cargo)) throw new PachaError('Cargo inválido')
-  const membresia = await db.membresia.findUnique({ where: { equipoId_usuarioId: { equipoId, usuarioId } } })
-  if (!membresia) throw new PachaError('No eres gerente de esta empresa', 403)
-  if (membresia.cargo !== cargo) throw new PachaError('Solo el encargado del área puede cambiar su permiso', 403)
-  await db.permisoArea.upsert({
-    where: { equipoId_cargo: { equipoId, cargo } },
-    update: { abierto },
-    create: { equipoId, cargo, abierto },
+export async function definirRepresentante(equipoId: string, nuevoRepresentanteId: string) {
+  const equipo = await db.equipo.findUnique({ where: { id: equipoId }, include: { industria: true } })
+  if (!equipo) throw new PachaError('Empresa no encontrada', 404)
+  const objetivo = await db.membresia.findUnique({
+    where: { equipoId_usuarioId: { equipoId, usuarioId: nuevoRepresentanteId } },
+    include: { usuario: { select: { nombre: true } } },
   })
-  return { ok: true, cargo, abierto }
+  if (!objetivo) throw new PachaError('Ese integrante no pertenece a la empresa', 404)
+  await db.$transaction([
+    db.membresia.updateMany({ where: { equipoId }, data: { representante: false, cargo: 'colaborador' } }),
+    db.membresia.update({
+      where: { id: objetivo.id },
+      data: { representante: true, cargo: 'representante' },
+    }),
+  ])
+  return { ok: true, representante: objetivo.usuario.nombre }
 }
 
-/** Guarda y ENVÍA el borrador de una área del comité (queda visible para todo el equipo).
- *  Corrección: cada área está BLOQUEADA para el equipo; solo puede trabajarla su
- *  gerente responsable, salvo que este haya abierto el permiso de su área. */
+/** Guarda y ENVÍA el borrador de una área de la decisión (queda visible para todo el equipo).
+ *  Nuevo modelo: SOLO el REPRESENTANTE del grupo toma decisiones; todos los
+ *  integrantes pueden consultarlas. */
 export async function guardarBorradorArea(
   equipoId: string,
   usuarioId: string,
@@ -1101,7 +1164,7 @@ export async function guardarBorradorArea(
   if (!equipo) throw new PachaError('Equipo no encontrado', 404)
   if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
 
-  await autorizarArea(equipoId, usuarioId, cargo)
+  await requireRepresentante(equipoId, usuarioId)
 
   const anio = equipo.industria.anioActual
   const decision = await db.decision.findUnique({ where: { equipoId_anio: { equipoId, anio } } })
@@ -1136,15 +1199,18 @@ export async function enviarDecision(equipoId: string, usuarioId: string) {
   if (!equipo) throw new PachaError('Equipo no encontrado', 404)
   if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
 
-  const anio = equipo.industria.anioActual
-  const previa = await db.decision.findUnique({ where: { equipoId_anio: { equipoId, anio } } })
-  if (previa && previa.estado !== 'BORRADOR') throw new PachaError('La decisión del año ya fue enviada')
-
-  // Membresía del remitente (para registrar quién envió)
+  // Membresía del remitente: SOLO el representante envía la decisión
   const membresia = await db.membresia.findUnique({
     where: { equipoId_usuarioId: { equipoId, usuarioId } },
   })
-  if (!membresia) throw new PachaError('No eres gerente de esta empresa', 403)
+  if (!membresia) throw new PachaError('No eres integrante de esta empresa', 403)
+  if (!membresia.representante) {
+    throw new PachaError('Solo el REPRESENTANTE del grupo puede enviar la decisión del año al docente', 403)
+  }
+
+  const anio = equipo.industria.anioActual
+  const previa = await db.decision.findUnique({ where: { equipoId_anio: { equipoId, anio } } })
+  if (previa && previa.estado !== 'BORRADOR') throw new PachaError('La decisión del año ya fue enviada')
 
   const marcas = await db.marca.findMany({ where: { equipoId, activa: true }, orderBy: { anioLanzamiento: 'asc' } })
   const borradores = await db.borradorArea.findMany({ where: { equipoId, anio, enviado: true } })
@@ -1235,7 +1301,7 @@ export async function aprobarDecision(decisionId: string, profesorId: string, ap
 
 // ===================== Desempeño y penalizaciones =====================
 
-/** El comité penaliza a un gerente con puntos muy negativos (menú definido por el grupo). */
+/** El REPRESENTANTE registra la sanción decidida por el grupo a un integrante con desempeño muy negativo. */
 export async function penalizarGerente(
   equipoId: string,
   objetivoUsuarioId: string,
@@ -1248,14 +1314,16 @@ export async function penalizarGerente(
   const equipo = await contextoEquipo(equipoId)
   if (!equipo) throw new PachaError('Equipo no encontrado', 404)
   if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
+  await requireRepresentante(equipoId, registradoPorId)
 
   const objetivo = await db.membresia.findUnique({
     where: { equipoId_usuarioId: { equipoId, usuarioId: objetivoUsuarioId } },
     include: { usuario: true },
   })
-  if (!objetivo) throw new PachaError('Ese gerente no pertenece a tu empresa', 404)
+  if (!objetivo) throw new PachaError('Ese integrante no pertenece a tu empresa', 404)
+  if (objetivo.usuarioId === registradoPorId) throw new PachaError('El representante no puede penalizarse a sí mismo')
   if (objetivo.puntos > DESEMPENO.umbralPenalizable) {
-    throw new PachaError(`Solo se puede penalizar a un gerente con ${DESEMPENO.umbralPenalizable} puntos o menos`)
+    throw new PachaError(`Solo se puede penalizar a un integrante con ${DESEMPENO.umbralPenalizable} puntos o menos`)
   }
   if (!['AMONESTACION', 'PUNTOS', 'EXPULSION'].includes(tipo)) throw new PachaError('Tipo de penalización inválido')
 
@@ -1297,6 +1365,7 @@ export async function penalizarGerente(
 
 export async function registrarProyecto(
   equipoId: string,
+  usuarioId: string,
   nombre: string,
   atributos: number[],
   presupuesto: number
@@ -1304,6 +1373,7 @@ export async function registrarProyecto(
   const equipo = await contextoEquipo(equipoId)
   if (!equipo) throw new PachaError('Equipo no encontrado', 404)
   if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
+  await requireRepresentante(equipoId, usuarioId)
   const anio = equipo.industria.anioActual
 
   const nombreLimpio = nombre.trim().slice(0, 24)

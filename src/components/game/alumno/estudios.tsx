@@ -17,7 +17,7 @@ import { ATRIBUTOS, ESTUDIOS, type EstudioDef } from '@/lib/pacha/catalogo'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
 
 const ROSA = '#f472b6'
@@ -533,7 +533,7 @@ export function AlumnoEstudios({ estado }: { estado: AlumnoEstado }) {
     <div className="space-y-4">
       <div>
         <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">🔬 Estudios de mercado</h2>
-        <p className="mt-0.5 text-sm text-zinc-400">Espía al mercado: awareness, preferencias, distribución y secretos de la competencia.</p>
+        <p className="mt-0.5 text-sm text-zinc-400">Espía al mercado: conocimiento de marca (awareness), preferencias, distribución y secretos de la competencia.</p>
       </div>
 
       {conDatos.length === 0 && pendientes.length === 0 && (

@@ -1,19 +1,21 @@
 'use client'
 
 // ============================================================
-// PACHA Simulador · Reportes contables del ÁREA del gerente
-// Cada gerente ve en su pestaña los números de SU área: tablas,
-// cifras y gráficos. El detalle completo sigue en «Reportes generales».
+// PACHA Simulador · Reportes contables POR ÁREA de la empresa
+// Todo el grupo puede consultar los números de las 5 áreas
+// (precios, publicidad, producción, ventas e I+D): tablas,
+// cifras completas y gráficos. El detalle sigue en «Reportes».
 // ============================================================
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { AlumnoEstado } from '@/lib/pacha/api-client'
 import { CANALES } from '@/lib/pacha/catalogo'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
-const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + 'k u'
+/** Cifras completas: 12.345,6 → "12.346" (miles) — sin abreviar a "12.3k". */
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
+const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 const fmtPct = (v: number) => v.toFixed(1) + '%'
 
 const ROSA = '#f472b6'
@@ -55,6 +57,41 @@ function Kpis({ items }: { items: { etiqueta: string; valor: string; color?: str
           <p className={`text-lg font-black leading-tight ${k.color ?? 'text-zinc-100'}`}>{k.valor}</p>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Selector de área + reporte contable: visible para TODO el grupo. */
+export function ReportesPorArea({ estado }: { estado: AlumnoEstado }) {
+  const opciones = [
+    { id: 'precios', etiqueta: '💰 Precios' },
+    { id: 'publicidad', etiqueta: '📺 Publicidad' },
+    { id: 'produccion', etiqueta: '🏭 Producción' },
+    { id: 'ventas', etiqueta: '🚚 Distribución y ventas' },
+    { id: 'investigacion', etiqueta: '🔬 Investigación y Desarrollo (I+D)' },
+  ]
+  const [cargo, setCargo] = useState('precios')
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Elegir área del reporte">
+        {opciones.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            role="tab"
+            aria-selected={o.id === cargo}
+            onClick={() => setCargo(o.id)}
+            className={`min-h-[34px] rounded-lg px-3 text-xs font-black transition-colors ${
+              o.id === cargo
+                ? 'bg-gradient-to-r from-pink-500/30 to-amber-500/30 text-white ring-1 ring-pink-400/50'
+                : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-zinc-200'
+            }`}
+          >
+            {o.etiqueta}
+          </button>
+        ))}
+      </div>
+      <ReportesArea estado={estado} cargo={cargo} />
     </div>
   )
 }
@@ -192,7 +229,7 @@ export function ReportesArea({ estado, cargo }: { estado: AlumnoEstado; cargo: s
         <Kpis
           items={[
             { etiqueta: `Publicidad Año ${ultima}`, valor: fmtBs(serieAnual.find((s) => s.anio === `Año ${ultima}`)?.publicidad ?? 0) },
-            { etiqueta: 'Awareness promedio', valor: Math.round((estado.marcas.reduce((s, m) => s + m.awareness, 0) / Math.max(1, estado.marcas.length)) * 100) + '%', color: 'text-pink-300' },
+            { etiqueta: 'Conocimiento de marca (awareness) promedio', valor: Math.round((estado.marcas.reduce((s, m) => s + m.awareness, 0) / Math.max(1, estado.marcas.length)) * 100) + '%', color: 'text-pink-300' },
             { etiqueta: 'Marcas activas', valor: String(estado.marcas.length) },
             { etiqueta: 'Presupuesto año en curso', valor: fmtBs(estado.marcas.reduce((s, m) => s + m.publicidad, 0)), color: 'text-amber-300' },
           ]}
@@ -204,7 +241,7 @@ export function ReportesArea({ estado, cargo }: { estado: AlumnoEstado; cargo: s
               <TableRow className="border-white/10">
                 <TableHead className="text-zinc-400">Marca</TableHead>
                 <TableHead className="text-right text-zinc-400">Publicidad año en curso</TableHead>
-                <TableHead className="text-right text-zinc-400">Awareness</TableHead>
+                <TableHead className="text-right text-zinc-400">Conocimiento de marca (awareness)</TableHead>
                 <TableHead className="text-right text-zinc-400">Ingresos Año {ultima}</TableHead>
               </TableRow>
             </TableHeader>
@@ -321,7 +358,7 @@ export function ReportesArea({ estado, cargo }: { estado: AlumnoEstado; cargo: s
             <TableHeader>
               <TableRow className="border-white/10">
                 <TableHead className="text-zinc-400">Marca</TableHead>
-                <TableHead className="text-right text-zinc-400">Ventas (k u)</TableHead>
+                <TableHead className="text-right text-zinc-400">Ventas (miles de unidades)</TableHead>
                 <TableHead className="text-right text-zinc-400">Ingresos</TableHead>
                 <TableHead className="text-right text-zinc-400">Cuota de la marca</TableHead>
               </TableRow>

@@ -150,7 +150,7 @@ export interface EstudioDef {
 }
 
 export const ESTUDIOS: EstudioDef[] = [
-  { id: 1, nombre: 'Awareness de marca', descripcion: 'Mide el conocimiento de marca de todas las firmas (propia y competencia).', costo: 60, icono: '📣', categoria: 'Marca' },
+  { id: 1, nombre: 'Conocimiento de marca (awareness)', descripcion: 'Mide cuánta gente conoce cada marca (propia y competencia): es el porcentaje de consumidores que la recuerdan.', costo: 60, icono: '📣', categoria: 'Marca' },
   { id: 2, nombre: 'Panel de consumidores', descripcion: 'Intención de compra por segmento y marca según hogares encuestados.', costo: 90, icono: '🛍️', categoria: 'Consumidores' },
   { id: 3, nombre: 'Panel de distribuidores', descripcion: 'Cobertura y exhibición de cada firma por canal de distribución.', costo: 80, icono: '🚚', categoria: 'Distribución' },
   { id: 4, nombre: 'Escala semántica · Niños', descripcion: 'Calificación de atributos de tus marcas vs. el ideal del segmento Niños.', costo: 40, icono: '🧒', categoria: 'Percepción' },

@@ -9,13 +9,9 @@ export async function POST(req: Request) {
     const usuario = await requireRol('ALUMNO')
     const membresia = await db.membresia.findFirst({ where: { usuarioId: usuario.id } })
     if (!membresia) throw new PachaError('No perteneces a ninguna empresa', 404)
-    // Corrección: SOLO el Gerente de Investigación y Desarrollo registra proyectos
-    if (membresia.cargo !== 'investigacion') {
-      throw new PachaError('Solo el Gerente de Investigación y Desarrollo puede registrar proyectos de I+D', 403)
-    }
 
     const { nombre, atributos, presupuesto } = await body<{ nombre: string; atributos: number[]; presupuesto: number }>(req)
-    const res = await registrarProyecto(membresia.equipoId, nombre, atributos, presupuesto)
+    const res = await registrarProyecto(membresia.equipoId, usuario.id, nombre, atributos, presupuesto)
     return ok(res)
   } catch (e) {
     return error(e)
