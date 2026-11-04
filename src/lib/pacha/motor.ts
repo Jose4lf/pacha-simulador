@@ -49,6 +49,8 @@ export interface ResultadoMarca {
   equipoId: string
   nombre: string
   ventas: number
+  demanda: number // demanda anual dirigida a la marca (antes del límite de stock)
+  ventaPerdida: number // demanda insatisfecha por quiebre de stock
   produccion: number
   inventarioFinal: number
   ingresos: number // netos de IVA
@@ -116,6 +118,7 @@ export interface ResultadoMercado {
   capturaEmpresas: number // % del mercado total atendido por las empresas jugables
   detalleMensual: { mes: number; demandaTotal: number; ventasEmpresas: number; ventasResto: number }[]
   eventosTrazabilidad: EfectosAgrupados['trazabilidad']
+  demandaEmpresas: number // demanda dirigida a las empresas jugables (miles L)
   macroResumen: { piAnual: number; indicePreciosFin: number; tipoCambioFinal: number; tasasComponentes: Record<string, number> }
 }
 
@@ -132,27 +135,40 @@ export function coberturaCanal(vendedores: number, canalIdx: number, necesarios:
   return clamp(0.15 + 0.85 * Math.min(1, vendedores / nec), 0.15, 1)
 }
 
-/** Atractivo de una marca para un segmento (0..1), con precio REAL (doc §18.8). */
+/** Atractivo de una marca para un segmento (0..1), con precio REAL (doc §18.8).
+ *  Incluye el EFECTO INMEDIATO de la publicidad (además del awareness que
+ *  madura al año siguiente) para que la decisión del año en curso se sienta. */
 export function atractivo(
   marca: { nombre: string; precio: number; publicidad: number; atributos: number[]; vendedores: number[]; awareness: number },
-  seg: { precioIdeal: number; sensibilidadPrecio: number; pesoPrecio: number; pesoAwareness: number; pesoCanales: number; pesoAjuste: number; ideal: number[] },
+  seg: { precioIdeal: number; sensibilidadPrecio: number; sensibilidadPublicidad?: number; pesoPrecio: number; pesoAwareness: number; pesoCanales: number; pesoAjuste: number; ideal: number[] },
   anio: number,
   indicePrecios = 100,
   necesariosCanal = [750, 75, 105]
 ): number {
-  // Precio real: la demanda reacciona al precio deflactado por el índice de precios
+  // Precio real: la demanda reacciona al precio deflactado por el índice de precios.
+  //  El peso del precio se AMPLIFICA (×2.5) para que la curva de demanda sea
+  //  realista: con el peso original, un precio 2.5× el ideal solo perdía ~50 %
+  //  de atractivo y vender caro era la estrategia ganadora.
   const precioReal = (100 * marca.precio) / indicePrecios
   const precioRel = precioReal / seg.precioIdeal
-  const scorePrecio = precioRel <= 1 ? 1 : Math.exp(-seg.sensibilidadPrecio * 0.35 * (precioRel - 1))
+  const pesoPrecioEfectivo = seg.pesoPrecio * 2.5
+  const scorePrecio = precioRel <= 1 ? 1 : Math.exp(-seg.sensibilidadPrecio * 0.5 * (precioRel - 1))
   const scoreAwareness = clamp(marca.awareness, 0.01, 1)
+  // Efecto inmediato de la campaña del año (peso según la sensibilidad del segmento)
+  const pesoPublicidad = 0.10 + 0.015 * (seg.sensibilidadPublicidad ?? 6)
+  const scorePublicidad = clamp(0.12 + 0.88 * Math.sqrt(clamp(marca.publicidad, 0, 5000) / 450), 0.12, 1)
   let scoreCanales = 0
   for (let c = 0; c < 3; c++) scoreCanales += (0.45 + c * -0.05 + (c === 2 ? 0.05 : 0)) * coberturaCanal(marca.vendedores[c] ?? 0, c, necesariosCanal)
   scoreCanales = clamp(scoreCanales / 0.9, 0, 1)
+  // La fuerza de ventas pesa el doble de lo original: era la decisión más
+  // invisible del juego (0 vendedores casi no cambiaban la demanda).
+  const pesoCanalesEfectivo = seg.pesoCanales * 2
   const scoreAjuste = ajusteProducto(marca.atributos, seg.ideal)
   const base =
-    Math.pow(clamp(scorePrecio, 0.01, 1), seg.pesoPrecio) *
+    Math.pow(clamp(scorePrecio, 0.01, 1), pesoPrecioEfectivo) *
     Math.pow(scoreAwareness, seg.pesoAwareness) *
-    Math.pow(clamp(scoreCanales, 0.01, 1), seg.pesoCanales) *
+    Math.pow(scorePublicidad, pesoPublicidad) *
+    Math.pow(clamp(scoreCanales, 0.01, 1), pesoCanalesEfectivo) *
     Math.pow(clamp(scoreAjuste, 0.01, 1), seg.pesoAjuste)
   return clamp(base * ruido(`${marca.nombre}|${seg.precioIdeal}|${anio}`, 0.04), 0.001, 1)
 }
@@ -209,15 +225,18 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
     const inversion = clamp(ctx.inversionCapacidad[equipoId] ?? 0, 0, Math.max(0, cap.maxima - cap.instalada))
     capacidadEquipo[equipoId] = cap.instalada + inversion
   }
-  const produccionPorEquipo: Record<string, number> = {}
+  // La capacidad del equipo se REPARTE PROPORCIONALMENTE entre sus marcas:
+  // antes la 1.ª marca consumía toda la capacidad y dejaba a las demás con 0.
+  const produccionSolicitada: Record<string, number> = {}
   const produccionDisponible: Record<string, number> = {}
   for (const m of activas) {
+    produccionSolicitada[m.equipoId] = (produccionSolicitada[m.equipoId] ?? 0) + Math.max(0, m.produccion)
+  }
+  for (const m of activas) {
     const cap = capacidadEquipo[m.equipoId] ?? 1000
-    const acumulado = produccionPorEquipo[m.equipoId] ?? 0
-    const permitido = Math.max(0, cap - acumulado)
-    const produccion = clamp(m.produccion, 0, permitido)
-    produccionDisponible[m.marcaId] = produccion
-    produccionPorEquipo[m.equipoId] = acumulado + produccion
+    const solicitado = produccionSolicitada[m.equipoId] ?? 0
+    const factor = solicitado > cap ? cap / solicitado : 1
+    produccionDisponible[m.marcaId] = Math.max(0, m.produccion) * factor
   }
 
   // ----- Atractivo por marca y segmento con precio REAL (doc §18.8)
@@ -230,22 +249,35 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
     }
   }
 
-  // ----- Resto del mercado (doc §1.2): no decide, pero gana o cede participación
-  // según el marketing, la distribución y la calidad relativa de las empresas,
-  // y responde al precio promedio del mercado y a la inflación.
-  const precioIdealPromedio = config.segmentos.reduce((s, x) => s + x.precioIdeal * x.peso, 0)
-  const ingresosRef = config.mercadoTotalAnio0 * (1 - config.pesoRestoMercado) * precioIdealPromedio
-  const nEmpresas = Math.max(1, new Set(activas.map((m) => m.equipoId)).size)
-  const publicidadRefEmpresa = 0.04 * ingresosRef / nEmpresas
-  const publicidadProm = activas.reduce((s, m) => s + m.publicidad, 0) / Math.max(1, activas.length)
-  const coberturaProm = activas.reduce((s, m) => s + m.vendedores.reduce((a, b) => a + b, 0), 0) / Math.max(1, activas.length)
-  const calidadProm = activas.reduce((s, m) => s + m.atributos.reduce((a, b) => a + b, 0) / 6, 0) / Math.max(1, activas.length)
-  const precioRealPromedio = activas.reduce((s, m) => s + (100 * m.precio) / indiceFin, 0) / Math.max(1, activas.length)
-  const publicidadRel = clamp(publicidadProm / Math.max(1, publicidadRefEmpresa), 0.4, 2)
-  const coberturaRel = clamp(coberturaProm / 100, 0.4, 2)
-  const calidadRel = clamp(calidadProm / 5.5, 0.4, 2)
-  const precioRel = clamp(precioRealPromedio / precioIdealPromedio, 0.5, 2)
-  const ratioResto = Math.max(0.2, (config.pesoRestoMercado / Math.max(0.05, 1 - config.pesoRestoMercado)) / (publicidadRel * coberturaRel * calidadRel * Math.pow(1 / precioRel, 0.8)))
+  // ----- Resto del mercado (doc §1.2): vendedores informales/ambulantes.
+  //  Modelo nuevo: el resto tiene un ATRACTIVO PROPIO FIJO (marca virtual),
+  //  escalado por pesoRestoMercado. Ya NO depende del precio/marketing
+  //  PROMEDIO de las empresas: antes, una sola empresa con un precio loco
+  //  hundía las ventas de TODAS las demás.
+  const atractivoResto: Record<string, number> = {}
+  for (const seg of config.segmentos) {
+    atractivoResto[seg.id] = atractivo(
+      {
+        nombre: `RESTO|${seg.id}`,
+        precio: seg.precioIdeal, // el informal vende al precio de referencia
+        publicidad: 120, // casi no pauta
+        atributos: [4, 3, 4, 3, 2, 3], // calidad artesanal desigual
+        vendedores: [55, 4, 3], // fuerte en el canal tradicional
+        awareness: 0.55, // el mercado informal es bien conocido
+      },
+      seg, anio, indiceFin, necesariosCanal
+    )
+  }
+  const restoCoberturaRegional: Record<string, number> = {}
+  for (const r of config.regiones) {
+    restoCoberturaRegional[r.id] = coberturaRegional(62, r.factorLogistico)
+  }
+  // Escala del resto: representa a MUCHOS vendedores pequeños, no una marca.
+  // Calibrado para que, con las empresas en sus valores iniciales, la DEMANDA
+  // de las empresas jugables ronde el 20-25 % del mercado total (queda algo
+  // de presión de stock: producir también es una decisión).
+  const pesoResto = clamp(config.pesoRestoMercado, 0, 0.95)
+  const escalaResto = 27 * (pesoResto / 0.78)
 
   // ----- Cobertura regional por empresa (doc §8)
   const coberturaPorEquipo: Record<string, Record<string, number>> = {}
@@ -256,6 +288,15 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
       const actual = coberturaPorEquipo[m.equipoId][r.id] ?? 0
       coberturaPorEquipo[m.equipoId][r.id] = Math.max(actual, coberturaRegional(total, r.factorLogistico))
     }
+  }
+  // Cobertura PROMEDIO por marca (ponderada por el peso de cada región): se usa
+  // para limitar cuánta demanda ajena (quiebre de stock ajeno) puede absorber
+  // una marca: sin vendedores no hay estantes donde el cliente sustituto compre.
+  const cobPromedioMarca: Record<string, number> = {}
+  for (const m of activas) {
+    let acc = 0
+    for (const r of config.regiones) acc += r.pesoEfectivo * (coberturaPorEquipo[m.equipoId][r.id] ?? 1)
+    cobPromedioMarca[m.marcaId] = acc
   }
 
   // ----- Distribución mensual de la producción según la estacionalidad del mercado
@@ -272,6 +313,8 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
   const ventasCanalMarca = new Map(activas.map((m) => [m.marcaId, new Map<string, number>()]))
   const sinStockMarca = new Map(activas.map((m) => [m.marcaId, false]))
   let quiebresStock = 0
+  let demandaEmpresasTotal = 0 // demanda dirigida a las empresas (antes de descontar stock)
+  const demandaAnualMarca = new Map(activas.map((m) => [m.marcaId, 0])) // demanda anual por marca
   const merma = config.produccion.merma
 
   for (const mes of meses) {
@@ -316,10 +359,10 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
         const puntajes = activas.map((m) => {
           const a = atractivos[m.marcaId][seg.id] ?? 0
           const cob = coberturaPorEquipo[m.equipoId][region.id] ?? 1
-          return { m, p: a * (0.5 + 0.5 * (cob / 10)) }
+          return { m, p: a * (0.25 + 0.75 * (cob / 10)) }
         })
         const sumaEmpresas = puntajes.reduce((s, x) => s + x.p, 0)
-        const pResto = sumaEmpresas * ratioResto
+        const pResto = escalaResto * (atractivoResto[seg.id] ?? 0.2) * (0.25 + 0.75 * ((restoCoberturaRegional[region.id] ?? 1) / 10))
         const total = sumaEmpresas + pResto
         if (total <= 0) continue
 
@@ -340,18 +383,67 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
       }
     }
 
-    // 4) Segunda pasada: ventas limitadas por el inventario disponible (reparto proporcional)
+    // 4) Segunda pasada: ventas limitadas por inventario. La demanda que una
+    //    marca NO puede servir se REALOCA entre las marcas con stock disponible
+    for (const [id, v] of demandaMarca) demandaAnualMarca.set(id, (demandaAnualMarca.get(id) ?? 0) + v)
+    for (const v of demandaMarca.values()) demandaEmpresasTotal += v
+    //    (proporcional a su demanda original): quedarse sin stock le cuesta al
+    //    que lo provoca, no al mercado entero.
+    const demandaOriginal = new Map(activas.map((m) => [m.marcaId, demandaMarca.get(m.marcaId) ?? 0]))
+    const demandaPendiente = new Map(demandaOriginal)
+    const ventasMes = new Map(activas.map((m) => [m.marcaId, 0]))
+    const quiebreMes = new Set<string>()
+    for (let iter = 0; iter < activas.length + 1; iter++) {
+      // a) vender todo lo que se pueda servir
+      for (const m of activas) {
+        const d = demandaPendiente.get(m.marcaId) ?? 0
+        if (d <= 1e-9) continue
+        const disp = inventarioMarca.get(m.marcaId) ?? 0
+        const venta = Math.min(d, disp)
+        if (venta <= 1e-9) continue
+        inventarioMarca.set(m.marcaId, Math.max(0, disp - venta))
+        ventasMes.set(m.marcaId, (ventasMes.get(m.marcaId) ?? 0) + venta)
+        demandaPendiente.set(m.marcaId, d - venta)
+      }
+      // b) marcas con demanda pendiente y SIN stock → liberan esa demanda
+      const enQuiebre = activas.filter((m) => (demandaPendiente.get(m.marcaId) ?? 0) > 1e-9 && (inventarioMarca.get(m.marcaId) ?? 0) <= 1e-9)
+      if (enQuiebre.length === 0) break
+      const conStock = activas.filter((m) => (demandaOriginal.get(m.marcaId) ?? 0) > 1e-9 && (inventarioMarca.get(m.marcaId) ?? 0) > 1e-9)
+      for (const m of enQuiebre) {
+        quiebreMes.add(m.marcaId)
+        const libera = demandaPendiente.get(m.marcaId) ?? 0
+        if (libera <= 1e-9 || conStock.length === 0) {
+          demandaPendiente.set(m.marcaId, 0)
+          continue
+        }
+        // Peso de absorción: demanda original de la receptora, LIMITADA por su
+        // cobertura. Tope de ventas del mes = demanda propia × clamp(cob/1.5, 1, 4):
+        // una marca sin vendedores NO captura los clientes que otra perdió.
+        const pesos = conStock.map((x) => {
+          const dOrig = demandaOriginal.get(x.marcaId) ?? 0
+          const cap = dOrig * clamp((cobPromedioMarca[x.marcaId] ?? 1) / 1.5, 1, 4)
+          const yaVendido = ventasMes.get(x.marcaId) ?? 0
+          const margen = Math.max(0, cap - yaVendido - (demandaPendiente.get(x.marcaId) ?? 0))
+          return { x, peso: Math.min(dOrig, margen) }
+        })
+        const sumaPesos = pesos.reduce((s, p) => s + p.peso, 0)
+        if (sumaPesos <= 1e-9) continue
+        for (const { x, peso } of pesos) {
+          const parte = libera * (peso / sumaPesos)
+          demandaPendiente.set(x.marcaId, (demandaPendiente.get(x.marcaId) ?? 0) + parte)
+        }
+        demandaPendiente.set(m.marcaId, 0)
+      }
+    }
     for (const m of activas) {
-      const d = demandaMarca.get(m.marcaId) ?? 0
-      const disp = inventarioMarca.get(m.marcaId) ?? 0
-      const venta = Math.min(d, disp)
-      inventarioMarca.set(m.marcaId, Math.max(0, disp - venta))
+      const d = demandaOriginal.get(m.marcaId) ?? 0
+      const venta = ventasMes.get(m.marcaId) ?? 0
       ventasMensualMarca.get(m.marcaId)![idx] = venta
-      if (d > disp * 1.02) {
+      if (quiebreMes.has(m.marcaId)) {
         sinStockMarca.set(m.marcaId, true)
         quiebresStock++
       }
-      if (d > 0) {
+      if (d > 1e-9) {
         const ratio = venta / d
         const mapaSeg = ventasSegmentoMarca.get(m.marcaId)!
         for (const [segId, v] of detSeg.get(m.marcaId)!) mapaSeg.set(segId, (mapaSeg.get(segId) ?? 0) + v * ratio)
@@ -370,6 +462,7 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
   const resultados: ResultadoMarca[] = []
   for (const m of activas) {
     const ventas = ventasMensualMarca.get(m.marcaId)!.reduce((s, v) => s + v, 0)
+    const demanda = Math.round(demandaAnualMarca.get(m.marcaId) ?? 0)
     const produccion = produccionDisponible[m.marcaId]
     const inventarioFinal = inventarioMarca.get(m.marcaId) ?? 0
     const precioSinIva = m.precio / (1 + config.impuestos.iva)
@@ -410,6 +503,8 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
       porSegmento,
       porCanal,
       sinStock: sinStockMarca.get(m.marcaId) ?? false,
+      demanda,
+      ventaPerdida: Math.max(0, round1(demanda - ventas)),
       awarenessNueva: round2(awarenessNueva),
       ventasMensual: ventasMensualMarca.get(m.marcaId)!.map(round1),
       precioReal: round2((100 * m.precio) / indiceFin),
@@ -531,6 +626,7 @@ export function simularAnioBolivia(anio: number, marcas: MarcaSim[], ctx: Contex
     ventasTotales: round1(ventasTotalesMercado),
     ventasEmpresas: round1(ventasEmpresasTotal),
     ventasResto: round1(ventasRestoTotal),
+    demandaEmpresas: round1(demandaEmpresasTotal),
     capturaEmpresas: ventasTotalesMercado > 0 ? round2((ventasEmpresasTotal / ventasTotalesMercado) * 100) : 0,
     detalleMensual: meses.map((mes, i) => ({
       mes,

@@ -58,7 +58,7 @@ function BadgeDecision({ estado }: { estado: string }) {
   if (estado === 'BORRADOR') {
     return <Badge className="border border-amber-400/40 bg-amber-400/15 text-[10px] text-amber-300">Borrador</Badge>
   }
-  return <Badge className="border border-red-400/40 bg-red-400/15 text-[10px] text-red-300">Pendiente</Badge>
+  return <Badge className="border border-zinc-400/30 bg-zinc-400/10 text-[10px] text-zinc-400">Sin enviar</Badge>
 }
 
 function BadgeEstadoIndustria({ estado }: { estado: string }) {
@@ -436,6 +436,35 @@ function TarjetaIndustria({
                     <TableCell>
                       <div className="flex items-center gap-1.5">
                         <BadgeDecision estado={eq.decisionEstado} />
+                        {eq.decisionId && eq.decisionEstado === 'ENVIADA' && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={aprobandoId !== null}
+                            onClick={() => void onAprobar(eq.decisionId!, true)}
+                            title={`Dar visto bueno a la decisión del año de ${eq.nombre}`}
+                            className="h-7 bg-emerald-600 px-2 text-[10px] font-black text-white hover:bg-emerald-500"
+                          >
+                            {aprobandoId === eq.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                            ) : (
+                              <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
+                            )}
+                            ✓ Visto bueno
+                          </Button>
+                        )}
+                        {eq.decisionId && eq.decisionEstado === 'APROBADA' && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            disabled={aprobandoId !== null}
+                            onClick={() => void onAprobar(eq.decisionId!, false)}
+                            title={`Quitar el visto bueno a ${eq.nombre}`}
+                            className="h-7 border border-amber-400/40 bg-amber-400/10 px-2 text-[10px] font-bold text-amber-200 hover:bg-amber-400/20"
+                          >
+                            <Undo2 className="h-3 w-3" aria-hidden="true" /> Quitar
+                          </Button>
+                        )}
                         {eq.decisionId && (
                           <Button
                             type="button"
@@ -999,12 +1028,20 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
     setProcesandoId(ind.id)
     try {
       const r = await api.procesarRonda(ind.id)
+      const sinBueno: string[] = (r as { equiposSinVistoBueno?: string[] }).equiposSinVistoBueno ?? []
       toast({
         title: r.finalizada ? '🏆 ¡Simulación finalizada!' : `✅ Año ${r.anioProcesado} simulado`,
         description: r.finalizada
           ? `Ventas del mercado: ${Math.round(r.ventasTotales).toLocaleString('es-BO')}k unidades · ¡Revisen el podio final!`
           : `Ventas del mercado: ${Math.round(r.ventasTotales).toLocaleString('es-BO')}k unidades · La industria avanza al Año ${r.anioNuevo}. Los reportes ya están disponibles.`,
       })
+      if (sinBueno.length > 0) {
+        toast({
+          title: '⚠️ Empresas que jugaron SIN decisiones',
+          description: `${sinBueno.join(', ')}: no tenían el visto bueno, así que el motor usó sus valores anteriores. Sus decisiones se aplicarán el próximo año si les das el visto bueno a tiempo.`,
+          variant: 'destructive',
+        })
+      }
       await refresh()
     } catch (e) {
       toast({ title: 'No se pudo correr la simulación', description: msg(e), variant: 'destructive' })
