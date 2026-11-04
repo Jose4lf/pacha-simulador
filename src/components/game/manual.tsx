@@ -255,7 +255,7 @@ function CapComite() {
       <Tabla
         encabezados={['Rol', 'Responsabilidad']}
         filas={[
-          ['👑 REPRESENTANTE', 'Guarda los borradores de las 5 áreas, envía la decisión del año al docente, registra proyectos de I+D y aplica las sanciones que el grupo acuerde.'],
+          ['👑 REPRESENTANTE', 'Guarda los borradores de las 5 áreas, envía la decisión del año al docente y registra proyectos de I+D.'],
           ['👤 Integrantes', 'Analizan todos los reportes y datos financieros, revisan las decisiones por área y aconsejan al representante. Pueden ver TODO, pero no editar.'],
           ['🧑‍🏫 Docente', 'Designa o cambia al REPRESENTANTE en cualquier momento desde la tabla de empresas.'],
         ]}
@@ -293,28 +293,9 @@ function CapComite() {
         ]}
       />
 
-      <Subtitulo>Puntos de desempeño</Subtitulo>
-      <Lista
-        items={[
-          <>
-            El REPRESENTANTE empieza con <Chip color="zinc">0 puntos</Chip> y responde por la decisión completa
-            del grupo.
-          </>,
-          <>
-            Por cada área con borrador guardado gana <Chip color="emerald">+5</Chip>; por cada área{' '}
-            <strong className="text-zinc-100">sin trabajar</strong> pierde <Chip color="pink">−10</Chip>.
-          </>,
-          <>
-            Un integrante con <Chip color="pink">−20 o menos</Chip> puede ser{' '}
-            <strong className="text-zinc-100">penalizado</strong>: el grupo elige la sanción (amonestación
-            escrita, restar los puntos que decida o expulsarlo de la empresa) y el REPRESENTANTE la registra;
-            el motivo queda registrado para el docente.
-          </>,
-        ]}
-      />
       <Tip>
         Repartan las áreas al inicio, acuerden plazos internos y revisen el grupo antes del envío final: un año
-        con áreas “sin trabajar” juega con valores viejos y además golpea el desempeño del equipo.
+        con áreas “sin trabajar” juega con valores viejos y perjudica los resultados de la empresa.
       </Tip>
     </div>
   )
@@ -441,8 +422,7 @@ function CapDecisiones() {
           </>,
           <>
             Si el comité <strong className="text-zinc-100">no envía</strong> y el docente corre el año, la
-            empresa juega con los valores vigentes y las áreas quedan <Chip color="pink">sin trabajar</Chip>{' '}
-            (−10 puntos de desempeño cada uno).
+            empresa juega con los valores vigentes y las áreas quedan <Chip color="pink">sin trabajar</Chip>.
           </>,
           'El costo de los estudios que marcó el área de I+D se cobra al enviar la decisión del año.',
         ]}
@@ -748,8 +728,7 @@ function CapConsejos() {
           </>,
           <>
             <strong className="text-zinc-100">Trabajen el comité</strong>: si un área queda "sin trabajar", la
-            empresa decide con valores viejos y el representante pierde puntos. Revisen los borradores antes del
-            envío final.
+            empresa decide con valores viejos. Revisen los borradores antes del envío final.
           </>,
         ]}
       />

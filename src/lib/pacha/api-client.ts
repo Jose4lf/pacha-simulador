@@ -52,21 +52,11 @@ export interface CargoFront {
   descripcion: string
 }
 
-export interface DesempenoConfig {
-  puntosIniciales: number
-  premioTrabajar: number
-  penalizacionSinTrabajar: number
-  umbralPenalizable: number
-  restaMaximaPenalizacion: number
-}
-
 export interface GerenteComite {
   usuarioId: string
   nombre: string
-  cargo: string
   /** 👑 Único integrante que toma las decisiones del grupo. */
   representante: boolean
-  puntos: number
 }
 
 export interface BorradorAreaFront {
@@ -76,18 +66,6 @@ export interface BorradorAreaFront {
   enviadoPorId: string | null
   enviadoAt: string | null
   updatedAt: string
-}
-
-export interface PenalizacionFront {
-  id: string
-  usuarioId: string
-  gerente: string
-  tipo: 'AMONESTACION' | 'PUNTOS' | 'EXPULSION' | string
-  puntos: number
-  motivo: string
-  anio: number
-  registradaPor: string
-  createdAt: string
 }
 
 export interface ProyectoEstado {
@@ -139,16 +117,14 @@ export interface AlumnoEstado {
   usuario: UsuarioSesion
   /** false = SIN DESIGNAR: la cuenta existe pero el docente aún no lo asigna a una empresa. */
   designado: boolean
-  membresia: { cargo: string; puntos: number; esRepresentante: boolean } | null
+  membresia: { esRepresentante: boolean } | null
   equipo: { id: string; nombre: string; color: string }
   industria: { id: string; nombre: string; anioActual: number; anioMaximo: number; estado: string }
   marcas: MarcaEstado[]
   decision: { estado: string; contenido: DecisionContenidoPayload } | null
   comite: GerenteComite[]
   borradores: BorradorAreaFront[]
-  penalizaciones: PenalizacionFront[]
   cargos: CargoFront[]
-  desempeno: DesempenoConfig
   proyectos: ProyectoEstado[]
   reportes: ReporteResumen[]
   estudiosComprados: { anio: number; estudioId: number; costo: number; tieneDatos: boolean }[]
@@ -210,7 +186,7 @@ export interface ProfesorIndustria {
     color: string
     numMarcas: number
     marcas: { id: string; nombre: string }[]
-    integrantes: { usuarioId: string; nombre: string; cargo: string; representante: boolean; puntos: number }[]
+    integrantes: { usuarioId: string; nombre: string; representante: boolean }[]
     decisionEstado: string
     decisionId: string | null
     aprobada: boolean
@@ -333,11 +309,6 @@ export const api = {
     request<{ ok: boolean; areasSinTrabajar: string[]; estudiosComprados: number }>('/api/alumno/decisiones', {
       method: 'POST',
       body: JSON.stringify({ accion: 'enviar' }),
-    }),
-  penalizarGerente: (usuarioId: string, tipo: 'AMONESTACION' | 'PUNTOS' | 'EXPULSION', puntos?: number, motivo?: string) =>
-    request<{ ok: boolean; puntosRestados: number; expulsado: boolean; nuevoPuntos: number }>('/api/alumno/penalizar', {
-      method: 'POST',
-      body: JSON.stringify({ usuarioId, tipo, puntos, motivo }),
     }),
   registrarProyecto: (nombre: string, atributos: number[], presupuesto: number) =>
     request<{ ok: boolean }>('/api/alumno/proyectos', {

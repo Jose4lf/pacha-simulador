@@ -766,7 +766,7 @@ function construirVistaPrevia(
  * 1) prepara el entorno del periodo (eventos + inflación, congelados al ejecutar)
  * 2) lee decisiones APROBADAS · 3) aplica I+D aprobado · 4) ejecuta el motor mensual ·
  * 5) guarda reportes con detalle · 6) actualiza marcas, capacidad y deuda ·
- * 7) genera estudios · 8) evalúa I+D · 9) ajusta puntos de desempeño · 10) avanza el año.
+ * 7) genera estudios · 8) evalúa I+D · 9) avanza el año.
  * Las empresas sin visto bueno juegan con sus valores vigentes (predeterminados).
  */
 export async function procesarRonda(industriaId: string) {
@@ -981,23 +981,7 @@ export async function procesarRonda(industriaId: string) {
   // 7) Evaluar proyectos I+D iniciados este año (sorteo determinista)
   await evaluarProyectos(industria.id, anio)
 
-  // 8) Puntos de desempeño: los decide el REPRESENTANTE del grupo. Por cada área
-  //    con borrador enviado gana +5; por cada área sin borrador pierde −10.
-  const borradores = await db.borradorArea.findMany({ where: { equipoId: { in: equipoIds }, anio, enviado: true } })
-  const trabajados = new Set(borradores.map((b) => `${b.equipoId}|${b.cargo}`))
-  for (const equipo of industria.equipos) {
-    const representante = equipo.membresias.find((m) => m.representante)
-    if (!representante) continue
-    let delta = 0
-    for (const cargo of CARGOS) {
-      delta += trabajados.has(`${equipo.id}|${cargo.id}`) ? DESEMPENO.premioTrabajar : DESEMPENO.penalizacionSinTrabajar
-    }
-    if (delta !== 0) {
-      await db.membresia.update({ where: { id: representante.id }, data: { puntos: round2(representante.puntos + delta) } })
-    }
-  }
-
-  // 9) Avanzar el año (o finalizar la simulación)
+  // 8) Avanzar el año (o finalizar la simulación)
   const nuevoAnio = anio + 1
   const finalizada = nuevoAnio > industria.anioMaximo
   await db.industria.update({
@@ -1299,68 +1283,6 @@ export async function aprobarDecision(decisionId: string, profesorId: string, ap
   return { ok: true, estado: aprobada ? 'APROBADA' : 'ENVIADA' }
 }
 
-// ===================== Desempeño y penalizaciones =====================
-
-/** El REPRESENTANTE registra la sanción decidida por el grupo a un integrante con desempeño muy negativo. */
-export async function penalizarGerente(
-  equipoId: string,
-  objetivoUsuarioId: string,
-  tipo: 'AMONESTACION' | 'PUNTOS' | 'EXPULSION',
-  puntosRestar: number,
-  motivo: string,
-  registradoPorId: string,
-  anioActual: number
-) {
-  const equipo = await contextoEquipo(equipoId)
-  if (!equipo) throw new PachaError('Equipo no encontrado', 404)
-  if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
-  await requireRepresentante(equipoId, registradoPorId)
-
-  const objetivo = await db.membresia.findUnique({
-    where: { equipoId_usuarioId: { equipoId, usuarioId: objetivoUsuarioId } },
-    include: { usuario: true },
-  })
-  if (!objetivo) throw new PachaError('Ese integrante no pertenece a tu empresa', 404)
-  if (objetivo.usuarioId === registradoPorId) throw new PachaError('El representante no puede penalizarse a sí mismo')
-  if (objetivo.puntos > DESEMPENO.umbralPenalizable) {
-    throw new PachaError(`Solo se puede penalizar a un integrante con ${DESEMPENO.umbralPenalizable} puntos o menos`)
-  }
-  if (!['AMONESTACION', 'PUNTOS', 'EXPULSION'].includes(tipo)) throw new PachaError('Tipo de penalización inválido')
-
-  let resta = 0
-  if (tipo === 'PUNTOS') {
-    resta = Math.round(clampNum(puntosRestar, 1, DESEMPENO.restaMaximaPenalizacion))
-    await db.membresia.update({
-      where: { id: objetivo.id },
-      data: { puntos: round2(objetivo.puntos - resta) },
-    })
-  }
-  if (tipo === 'EXPULSION') {
-    await db.membresia.delete({ where: { id: objetivo.id } })
-  }
-
-  const penalizacion = await db.penalizacion.create({
-    data: {
-      equipoId,
-      usuarioId: objetivoUsuarioId,
-      tipo,
-      puntos: resta,
-      motivo: (motivo || '').slice(0, 300),
-      anio: anioActual,
-      registradaPorId: registradoPorId,
-    },
-  })
-
-  return {
-    ok: true,
-    tipo,
-    puntosRestados: resta,
-    expulsado: tipo === 'EXPULSION',
-    nuevoPuntos: tipo === 'PUNTOS' ? round2(objetivo.puntos - resta) : objetivo.puntos,
-    penalizacionId: penalizacion.id,
-  }
-}
-
 // ===================== Proyectos I+D =====================
 
 export async function registrarProyecto(
@@ -1439,8 +1361,4 @@ function clampNum(v: number, min: number, max: number): number {
 
 function round1Safe(v: number): number {
   return Math.round(v * 10) / 10
-}
-
-function round2(v: number): number {
-  return Math.round(v * 100) / 100
 }

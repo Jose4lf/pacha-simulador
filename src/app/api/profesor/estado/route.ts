@@ -33,7 +33,7 @@ export async function GET() {
         nombre: string
         color: string
         numMarcas: number
-        integrantes: { usuarioId: string; nombre: string; cargo: string; puntos: number }[]
+        integrantes: { usuarioId: string; nombre: string; representante: boolean }[]
         decisionEstado: string
         decisionId: string | null
         aprobada: boolean
@@ -68,9 +68,7 @@ export async function GET() {
           integrantes: e.membresias.map((m) => ({
             usuarioId: m.usuario.id,
             nombre: m.usuario.nombre,
-            cargo: m.cargo,
             representante: m.representante,
-            puntos: m.puntos,
           })),
           decisionEstado: dec?.estado ?? 'PENDIENTE',
           decisionId: dec?.id ?? null,

@@ -3,7 +3,7 @@ import { error, ok } from '@/lib/pacha/api-helpers'
 import { requireRol } from '@/lib/pacha/auth'
 import { parseDecision, parseJson } from '@/lib/pacha/tipos'
 import { rankingIndustria } from '@/lib/pacha/simulacion'
-import { CARGOS, DESEMPENO, ESTUDIOS, ID_CONFIG, presupuestoNormal, probabilidadExito } from '@/lib/pacha/catalogo'
+import { CARGOS, ESTUDIOS, ID_CONFIG, presupuestoNormal, probabilidadExito } from '@/lib/pacha/catalogo'
 
 /** Estado completo de juego del alumno (HUD + decisión + reportes + datos de todas las pestañas). */
 export async function GET() {
@@ -22,7 +22,7 @@ export async function GET() {
     const equipo = membresia.equipo
     const anio = equipo.industria.anioActual
 
-    const [marcas, decision, proyectos, reportes, compras, ranking, comite, borradores, penalizaciones, eventosPeriodo, marcasHistoria] = await Promise.all([
+    const [marcas, decision, proyectos, reportes, compras, ranking, comite, borradores, eventosPeriodo, marcasHistoria] = await Promise.all([
       db.marca.findMany({ where: { equipoId: equipo.id }, orderBy: { anioLanzamiento: 'asc' } }),
       db.decision.findUnique({ where: { equipoId_anio: { equipoId: equipo.id, anio } } }),
       db.proyectoID.findMany({ where: { equipoId: equipo.id }, orderBy: { anioInicio: 'asc' } }),
@@ -37,15 +37,6 @@ export async function GET() {
       db.borradorArea.findMany({
         where: { equipoId: equipo.id, anio },
         include: { enviadoPor: { select: { id: true, nombre: true } } },
-      }),
-      db.penalizacion.findMany({
-        where: { equipoId: equipo.id },
-        include: {
-          usuario: { select: { id: true, nombre: true } },
-          registradaPor: { select: { id: true, nombre: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
       }),
       // Eventos que ocurren (u ocurrieron) DENTRO de esta simulación, por año,
       // con sus propiedades (categoría, región, meses, efectos) — doc §15.
@@ -67,7 +58,7 @@ export async function GET() {
     return ok({
       usuario,
       designado: true,
-      membresia: { cargo: membresia.cargo, puntos: membresia.puntos, esRepresentante: membresia.representante },
+      membresia: { esRepresentante: membresia.representante },
       equipo: { id: equipo.id, nombre: equipo.nombre, color: equipo.color },
       industria: {
         id: equipo.industria.id,
@@ -95,9 +86,7 @@ export async function GET() {
       comite: comite.map((m) => ({
         usuarioId: m.usuario.id,
         nombre: m.usuario.nombre,
-        cargo: m.cargo,
         representante: m.representante,
-        puntos: m.puntos,
       })),
       borradores: borradores
         .filter((b) => b.enviado)
@@ -109,19 +98,7 @@ export async function GET() {
           enviadoAt: b.enviadoAt?.toISOString() ?? null,
           updatedAt: b.updatedAt.toISOString(),
         })),
-      penalizaciones: penalizaciones.map((p) => ({
-        id: p.id,
-        usuarioId: p.usuario.id,
-        gerente: p.usuario.nombre,
-        tipo: p.tipo,
-        puntos: p.puntos,
-        motivo: p.motivo,
-        anio: p.anio,
-        registradaPor: p.registradaPor.nombre,
-        createdAt: p.createdAt.toISOString(),
-      })),
       cargos: CARGOS,
-      desempeno: DESEMPENO,
       proyectos: proyectos.map((p) => {
         const attrs = parseJson<number[]>(p.atributos, [5, 5, 5, 5, 5, 5])
         return {

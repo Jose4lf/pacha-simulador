@@ -76,12 +76,6 @@ function BadgeEstadoIndustria({ estado }: { estado: string }) {
   )
 }
 
-function colorPuntos(p: number): string {
-  if (p <= -20) return 'text-red-300'
-  if (p < 0) return 'text-amber-300'
-  return 'text-zinc-300'
-}
-
 /* ============ Diálogo de decisión del equipo (vista del docente) ============ */
 
 function DialogoDecision({
@@ -303,8 +297,7 @@ function TarjetaIndustria({
                     {' '}
                     <b className="text-amber-300">
                       ⚠️ {sinVistoBueno.length} empresa(s) sin visto bueno ({sinVistoBueno.map((e) => e.nombre).join(', ')}
-                      ): jugarán con sus valores predeterminados y sus áreas quedarán «sin trabajar» (el representante
-                      pierde puntos de desempeño).
+                      ): jugarán con sus valores predeterminados y sus áreas quedarán «sin trabajar».
                     </b>
                   </>
                 )}
@@ -404,7 +397,7 @@ function TarjetaIndustria({
                         {eq.integrantes.map((g) => (
                           <span
                             key={g.usuarioId}
-                            title={g.representante ? 'REPRESENTANTE del grupo' : `Integrante · ${g.puntos} pts`}
+                            title={g.representante ? 'REPRESENTANTE del grupo' : 'Integrante del grupo'}
                             className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
                               g.representante
                                 ? 'border-amber-400/50 bg-amber-400/15 text-amber-100'
@@ -412,10 +405,6 @@ function TarjetaIndustria({
                             }`}
                           >
                             {g.representante ? '👑 ' : ''}{g.nombre}
-                            <span className={`ml-1 font-bold ${colorPuntos(g.puntos)}`}>
-                              {g.puntos > 0 ? '+' : ''}
-                              {Math.round(g.puntos)}
-                            </span>
                           </span>
                         ))}
                         {eq.integrantes.length > 1 && (

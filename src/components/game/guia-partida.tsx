@@ -120,8 +120,8 @@ function FaseRectorado() {
       </ol>
       <Tip>
         El Rectorado también puede <b>restablecer la clave</b> de cualquier usuario y{' '}
-        <b>eliminar</b> alumnos o profesores con el botón 🗑️ (no puede eliminar administradores ni usuarios con auditoría
-        de sanciones o simulaciones a su cargo).
+        <b>eliminar</b> alumnos o profesores con el botón 🗑️ (no puede eliminar administradores ni usuarios
+        con simulaciones a su cargo).
       </Tip>
     </>
   )
@@ -213,7 +213,7 @@ function FaseAlumnos() {
       <ol className="mb-4 space-y-3">
         <Paso n={1}>
           El alumno entra al login con su usuario (ejemplo: <b>colibri</b>) y la clave <b>321</b>. Ve su
-          empresa, si es REPRESENTANTE o integrante, sus puntos de desempeño y el entorno del año actual
+          empresa, si es REPRESENTANTE o integrante, y el entorno del año actual
           (eventos anunciados e inflación). Si aún no fue asignado a ninguna empresa verá su estado
           «Sin designar» y deberá esperar al docente.
         </Paso>
@@ -235,11 +235,6 @@ function FaseAlumnos() {
           Investigación y Desarrollo.
         </Paso>
       </ol>
-      <Alerta>
-        Los puntos de desempeño son responsabilidad del REPRESENTANTE: por cada área con borrador guardado
-        suma; por cada área sin borrador resta. Además, el grupo (a través del representante) puede sancionar
-        a un integrante con desempeño muy negativo (amonestación, resta de puntos o expulsión).
-      </Alerta>
     </>
   )
 }
@@ -268,13 +263,12 @@ function FaseRonda() {
         <Paso n={3}>
           <b className="text-zinc-100">Alumnos — Grupo:</b> la pestaña de grupo muestra las decisiones de
           cada área <b>en cifras</b> (precio, presupuesto, producción, vendedores). Todo el grupo analiza,
-          discute y ajusta; el representante aplica las sanciones que el grupo acuerde a un integrante con
-          desempeño muy negativo.
+          discute y ajusta antes del envío final.
         </Paso>
         <Paso n={4}>
           <b className="text-zinc-100">Alumnos — Enviar decisión:</b> el REPRESENTANTE pulsa «Enviar
           decisión al docente». El sistema consolida los 5 borradores; un área sin borrador usa los
-          valores vigentes y queda marcada «sin trabajar» (penalización de puntos).
+          valores vigentes y queda marcada «sin trabajar».
         </Paso>
         <Paso n={5}>
           <b className="text-zinc-100">Docente — Aprobar y ejecutar:</b> revisa la decisión de cada empresa

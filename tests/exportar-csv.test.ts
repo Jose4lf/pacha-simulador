@@ -5,19 +5,17 @@ import type { AlumnoEstado, ReporteDetalle } from '../src/lib/pacha/api-client'
 const estado = {
   usuario: { id: 'u1', nombre: 'anamamani', rol: 'ALUMNO' },
   designado: true,
-  membresia: { cargo: 'representante', puntos: 5, esRepresentante: true },
+  membresia: { esRepresentante: true },
   equipo: { id: 'e1', nombre: 'Empresa Glaciar', color: '#f472b6' },
   industria: { id: 'i1', nombre: 'Prueba Visual 2026', anioActual: 2, anioMaximo: 8, estado: 'ACTIVA' },
   marcas: [],
   decision: null,
   comite: [
-    { usuarioId: 'u1', nombre: 'anamamani', cargo: 'representante', representante: true, puntos: 5 },
-    { usuarioId: 'u2', nombre: 'carlaflores', cargo: 'colaborador', representante: false, puntos: 0 },
+    { usuarioId: 'u1', nombre: 'anamamani', representante: true },
+    { usuarioId: 'u2', nombre: 'carlaflores', representante: false },
   ],
   borradores: [],
-  penalizaciones: [],
   cargos: [],
-  desempeno: { puntosIniciales: 0, premioTrabajar: 5, penalizacionSinTrabajar: -10, umbralPenalizable: -20, restaMaximaPenalizacion: 100 },
   proyectos: [],
   reportes: [
     { anio: 1, ventas: 199.4, ingresos: 3146.7, costos: 1893.2, publicidad: 680, fuerzaVentas: 402, investigacionMercado: 120, contribucion: 1253.5, participacion: 50.8, sinDecision: false },

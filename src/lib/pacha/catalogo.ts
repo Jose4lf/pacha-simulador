@@ -226,13 +226,9 @@ export function esCargoValido(cargo: string): boolean {
   return CARGO_IDS.includes(cargo)
 }
 
-/** Reglas de puntos de desempeño de los gerentes (elegidas por el docente). */
+/** Puntos con los que arranca cada membresía (el puntaje de desempeño fue retirado del juego). */
 export const DESEMPENO = {
   puntosIniciales: 0,
-  premioTrabajar: 5, // +5 si su área envió borrador
-  penalizacionSinTrabajar: -10, // −10 si su área quedó "sin trabajar"
-  umbralPenalizable: -20, // a este nivel el comité ya puede penalizarlo
-  restaMaximaPenalizacion: 100, // tope que el grupo puede restar en una sanción
 }
 
 // ===================== I+D =====================
