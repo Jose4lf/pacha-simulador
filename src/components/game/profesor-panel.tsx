@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Eye, Factory, FileSpreadsheet, Loader2, Plus, Trash2, Undo2, Users, Wand2, XCircle } from 'lucide-react'
+import { CheckCircle2, Eye, Factory, FileSpreadsheet, Loader2, Plus, Trash2, Undo2, Users, Wand2 } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
 import { api, type ProfesorIndustria, type UsuarioSesion, type EmpresaCrearPayload } from '@/lib/pacha/api-client'
 import { slugUsuario } from '@/lib/pacha/slug'
@@ -37,15 +37,6 @@ const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error
 /** Cada empresa la juega UN solo jugador: el GERENTE (igual que el backend). */
 const GERENTES_POR_EMPRESA = 1
 
-/** Nombres cortos de los cargos (igual que el catálogo del backend). */
-const CARGO_CORTO: Record<string, string> = {
-  precios: '💰 Precios',
-  publicidad: '📺 Publicidad',
-  produccion: '🏭 Producción',
-  ventas: '🚚 Distribución',
-  investigacion: '🔬 I+D',
-}
-
 import { EntornoPeriodo } from './entorno-periodo'
 
 function BadgeDecision({ estado }: { estado: string }) {
@@ -54,9 +45,6 @@ function BadgeDecision({ estado }: { estado: string }) {
   }
   if (estado === 'ENVIADA') {
     return <Badge className="border border-sky-400/40 bg-sky-400/15 text-[10px] text-sky-300">📨 Enviada · sin revisar</Badge>
-  }
-  if (estado === 'BORRADOR') {
-    return <Badge className="border border-amber-400/40 bg-amber-400/15 text-[10px] text-amber-300">Borrador</Badge>
   }
   return <Badge className="border border-zinc-400/30 bg-zinc-400/10 text-[10px] text-zinc-400">Sin enviar</Badge>
 }
@@ -90,7 +78,9 @@ function DialogoDecision({
   aprobando: boolean
 }) {
   const c = eq.contenido
-  const sin = eq.areasSinBorrador
+  const inversion = c?.inversionCapacidad ?? 0
+  const totalPublicidad = (c?.marcas ?? []).reduce((s, m) => s + m.publicidad, 0)
+  const totalProduccion = (c?.marcas ?? []).reduce((s, m) => s + m.produccion, 0)
   return (
     <DialogContent className="max-h-[85vh] overflow-y-auto border-white/10 bg-[#1c1528] text-zinc-100 sm:max-w-2xl">
       <DialogHeader>
@@ -98,25 +88,31 @@ function DialogoDecision({
           📋 Decisión del Año {anio} · {eq.nombre}
         </DialogTitle>
         <DialogDescription className="text-zinc-400">
-          Consolidado de los borradores de las 5 áreas decididas por el GERENTE. Las áreas sin borrador usaron valores
-          predeterminados y quedaron «sin trabajar».
+          {eq.gerente ? `Enviada por ${eq.gerente} (GERENTE)` : 'Enviada por el GERENTE'} en un solo envío directo.
+          Todo lo que el gerente decidió está aquí; revisa las cifras y da (o quita) el visto bueno.
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-3">
-        {/* Estado de áreas */}
+        {/* Resumen rápido de las 5 áreas */}
         <div className="flex flex-wrap gap-1.5">
-          {(Object.keys(CARGO_CORTO) as string[]).map((id) =>
-            sin.includes(id) ? (
-              <Badge key={id} className="border border-red-400/40 bg-red-400/10 text-[10px] text-red-300">
-                <XCircle className="mr-1 h-3 w-3" aria-hidden="true" /> {CARGO_CORTO[id]}: sin trabajar
-              </Badge>
-            ) : (
-              <Badge key={id} className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
-                <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" /> {CARGO_CORTO[id]}: trabajada
-              </Badge>
-            )
+          <Badge className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
+            💰 {c?.marcas.length ?? 0} marca(s) con precio
+          </Badge>
+          <Badge className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
+            📺 Publicidad total {fmtBs(totalPublicidad)}
+          </Badge>
+          <Badge className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
+            🏭 Producción total {fmtU(totalProduccion)}
+          </Badge>
+          {inversion > 0 && (
+            <Badge className="border border-sky-400/40 bg-sky-400/10 text-[10px] text-sky-300">
+              🏗️ +{inversion.toLocaleString('es-BO')} mil L de capacidad
+            </Badge>
           )}
+          <Badge className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
+            🔬 {(c?.estudios ?? []).length} estudio(s) · 🌟 {(c?.nuevas ?? []).length} marca(s) nueva(s)
+          </Badge>
         </div>
 
         {/* Marcas */}
@@ -293,7 +289,7 @@ function TarjetaIndustria({
                     {' '}
                     <b className="text-amber-300">
                       ⚠️ {sinVistoBueno.length} empresa(s) sin visto bueno ({sinVistoBueno.map((e) => e.nombre).join(', ')}
-                      ): jugarán con sus valores predeterminados y sus áreas quedarán «sin trabajar».
+                      ): jugarán con sus valores vigentes sin aplicar su decisión.
                     </b>
                   </>
                 )}

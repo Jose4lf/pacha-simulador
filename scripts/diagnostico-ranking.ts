@@ -11,7 +11,7 @@
 import { db } from '@/lib/db'
 import { hashPassword } from '@/lib/pacha/auth'
 import {
-  crearIndustria, guardarBorradorArea, enviarDecision, aprobarDecision,
+  crearIndustria, enviarDecision, aprobarDecision,
   procesarRonda, rankingIndustria, eliminarIndustria,
 } from '@/lib/pacha/simulacion'
 
@@ -43,21 +43,21 @@ async function main() {
   async function decidir(nombreEquipo: string, d: typeof buena, enviar: boolean) {
     const eq = equipos.find((e) => e.nombre === nombreEquipo)!
     const memb = await db.membresia.findFirstOrThrow({ where: { equipoId: eq.id } })
-    const anio = 1
     const marcas = await db.marca.findMany({ where: { equipoId: eq.id, activa: true }, orderBy: { anioLanzamiento: 'asc' } })
-    await guardarBorradorArea(eq.id, memb.usuarioId, 'precios', {
-      precios: marcas.map((m, i) => ({ marcaId: m.id, precio: d.precios[i] ?? d.precios[0] })),
-    })
-    await guardarBorradorArea(eq.id, memb.usuarioId, 'publicidad', {
-      publicidades: marcas.map((m) => ({ marcaId: m.id, publicidad: d.publicidad })),
-    })
-    await guardarBorradorArea(eq.id, memb.usuarioId, 'produccion', {
-      producciones: marcas.map((m) => ({ marcaId: m.id, produccion: d.produccion })),
-    })
-    await guardarBorradorArea(eq.id, memb.usuarioId, 'ventas', {
-      ventas: marcas.map((m) => ({ marcaId: m.id, vendedores: d.vendedores })),
-    })
-    if (enviar) await enviarDecision(eq.id, memb.usuarioId)
+    if (enviar) {
+      // Envío DIRECTO: toda la decisión del año en una sola llamada (sin borradores)
+      await enviarDecision(eq.id, memb.usuarioId, {
+        marcas: marcas.map((m, i) => ({
+          marcaId: m.id,
+          precio: d.precios[i] ?? d.precios[0],
+          publicidad: d.publicidad,
+          produccion: d.produccion,
+          vendedores: d.vendedores,
+        })),
+        nuevas: [],
+        estudios: [],
+      })
+    }
   }
 
   await decidir('Buena', buena, true)

@@ -1,23 +1,23 @@
 /**
- * PRUEBA E2E «MOTOR 8 EMPRESAS» — PACHA Simulador (1 GERENTE por empresa)
+ * PRUEBA E2E «MOTOR 8 EMPRESAS» — PACHA Simulador (1 GERENTE, envío directo)
  * =======================================================================
- * Verifica el MOTOR con 8 empresas, cada una jugada por UN solo gerente
- * (el modelo nuevo del proyecto), y que TODOS LOS DATOS ESTÉN UNIDOS:
+ * Verifica el MOTOR con 8 empresas, cada una jugada por UN solo gerente que
+ * ENVÍA SU DECISIÓN DIRECTA (sin borradores ni puntaje de trabajo), y que
+ * TODOS LOS DATOS ESTÉN UNIDOS:
  *
+ *   ✔ el envío es UNO SOLO con todo el contenido (5 áreas de una vez)
+ *   ✔ el docente VE el contenido completo de lo que envió el gerente
+ *   ✔ mientras está ENVIADA (sin visto bueno) se puede corregir y REENVIAR
+ *   ✔ tras el visto bueno la decisión queda CONGELADA (reenvío rechazado)
+ *   ✔ el reporte del Año 0 (historia) tiene datos reales y DISTINTOS por
+ *     empresa, con estacionalidad mensual y estado de resultados completo
  *   ✔ la decisión del gerente se aplica a las marcas (precio/publicidad/
  *     producción quedan en el estado tras ejecutar la ronda)
  *   ✔ el reporte del año es la SUMA de sus marcas (ventas y contribución)
  *   ✔ el ranking que ve el profesor es IDÉNTICO al que ve el gerente
- *   ✔ los datos por empresa son DIFERENTES (el motor emula cada empresa)
  *   ✔ las decisiones mueven el ranking (contribución acumulada cambia,
  *     posiciones suben/bajan al cambiar la estrategia)
  *   ✔ el inventario no vendido fluye al año siguiente
- *   ✔ los eventos del período que ve el gerente coinciden con los del docente
- *
- * Estrategias por año (económicamente correctas, IVA 13% incluido):
- *   Año 1: 8 estrategias distintas  → datos por empresa diferentes
- *   Año 2: la DESASTROSA pasa a ÓPTIMA y la ÓPTIMA pasa a DORMIDA
- *   Año 3: se restauran las estrategias originales
  *
  * Uso:  bun tests/e2e-motor-8empresas.ts   (servidor dev en :3000)
  */
@@ -121,6 +121,32 @@ interface FilaRanking {
   posicion: number
 }
 
+// ══════════════════════════════════════════════════════════════
+// ENVÍO DIRECTO: toda la decisión del año en UNA sola llamada (sin borradores)
+// ══════════════════════════════════════════════════════════════
+interface DecisionMarca {
+  marcaId: string
+  precio: number
+  publicidad: number
+  produccion: number
+  vendedores: number[]
+}
+
+async function enviarDecisionDirecta(
+  token: string,
+  marcas: DecisionMarca[],
+  inversionCapacidad?: number
+) {
+  return pedir<{ ok: boolean; estudiosComprados: number }>('POST', '/api/alumno/decisiones', token, {
+    contenido: {
+      marcas,
+      nuevas: [],
+      estudios: [],
+      ...(inversionCapacidad && inversionCapacidad > 0 ? { inversionCapacidad } : {}),
+    },
+  })
+}
+
 async function main() {
   console.log('════════════════════════════════════════════════════════')
   console.log('  PACHA Simulador · Motor 8 empresas · UN GERENTE por empresa')
@@ -199,12 +225,10 @@ async function main() {
   await pedir('POST', '/api/decano/usuarios', tokenAdmin, { accion: 'crear', nombre: sinEmpresa, password: CLAVE, rol: 'ALUMNO' })
   let rechazoLibre = ''
   try {
-    await pedir('POST', '/api/alumno/decisiones', await login(sinEmpresa), {
-      accion: 'borrador-area', cargo: 'precios', contenido: { precios: [] },
-    })
+    await pedir('POST', '/api/alumno/decisiones', await login(sinEmpresa), { contenido: { marcas: [] } })
   } catch (e) { rechazoLibre = (e as Error).message }
   assert(rechazoLibre !== '', `alumno sin empresa rechazado (mensaje: ${rechazoLibre.slice(0, 60)})`)
-  linea('🔒', 'Modo un jugador', 'Un alumno sin empresa NO puede tomar decisiones en ninguna de las 8.')
+  linea('🔒', 'Modo un jugador', 'Un alumno sin empresa NO puede enviar decisiones en ninguna de las 8.')
 
   // ── Fase 2 · Plan de eventos ────────────────────────────────────
   const plan = await pedir<{ anios: { anio: number; eventos: { categoria: string }[] }[] }>(
@@ -213,6 +237,25 @@ async function main() {
   const totalEventos = plan.anios.reduce((s, a) => s + a.eventos.length, 0)
   assert(totalEventos >= 8, `plan de eventos autocompletado con eventos (${totalEventos} en ${plan.anios.length} años)`)
   linea('🌦️', 'Docente', `Plan de eventos listo: ${totalEventos} eventos en ${plan.anios.length} años (1–3 por año).`)
+
+  // ── Fase 2.5 · Reporte general Año 0: historia REAL y DIFERENTE por empresa ──
+  {
+    const rep0a = await pedir<any>('GET', '/api/alumno/reportes?anio=0', resumen[0].tokenRep)
+    const rep0b = await pedir<any>('GET', `/api/alumno/reportes?anio=0`, resumen[1].tokenRep)
+    assert(rep0a.historia && rep0a.historia.length === 3, 'Año 0: historia con los 3 años anteriores')
+    const fin0 = rep0a.detalle?.finanzas ?? null
+    assert(fin0 && Number(fin0.logistica) > 0 && Number(fin0.iva) > 0, `Año 0: estado de resultados REAL (IVA ${fin0?.iva?.toFixed(0)}, logística ${fin0?.logistica?.toFixed(0)})`)
+    assert(Number(fin0.iue) >= 0 && Number(fin0.utilidadNeta) !== 0, `Año 0: IT/IUE y utilidad neta presentes (IUE ${fin0?.iue?.toFixed(0)})`)
+    const ventas0a = rep0a.historia.reduce((s: number, h: any) => s + h.ventasEquipo, 0)
+    const ventas0b = rep0b.historia.reduce((s: number, h: any) => s + h.ventasEquipo, 0)
+    assert(Math.abs(ventas0a - ventas0b) > 1, `Año 0: historia DISTINTA por empresa (${ventas0a.toFixed(0)} vs ${ventas0b.toFixed(0)} mil L)`)
+    // Estacionalidad: Enero > Junio (verano vs invierno en Bolivia)
+    const mensual = rep0a.detalle?.detalleMensual ?? []
+    const enero = mensual[0]?.ventasEmpresas ?? 0
+    const junio = mensual[5]?.ventasEmpresas ?? 0
+    assert(enero > junio * 1.1, `Año 0: estacionalidad mensual real (Enero ${enero.toFixed(0)} > Junio ${junio.toFixed(0)} mil L)`)
+    linea('📊', 'Reportes', 'Año 0 verificado: historia realista, distinta por empresa, con impuestos y estacionalidad de verano/invierno.')
+  }
 
   // ── Fase 3 · 3 rondas del motor ─────────────────────────────────
   let ordenCambioConfirmado = false
@@ -228,49 +271,61 @@ async function main() {
     if (anio === 1) eventosDocenteAnio1 = eventosVista.length
     linea('🎓', 'Docente', `Período ${anio} preparado: ${eventosVista.length} evento(s) activo(s), escenario ${escenario ?? 'sorteado'}.`)
 
-    // El GERENTE de cada empresa decide su estrategia del año
+    // El GERENTE de cada empresa ENVÍA SU DECISIÓN DIRECTA (un solo envío, todo el contenido)
     for (let i = 0; i < resumen.length; i++) {
       const emp = resumen[i]
       const est = ESTRATEGIAS[PLAN[anio - 1][i]]
       const vistaAl = await pedir<any>('GET', '/api/alumno/estado', emp.tokenRep)
       const marcaAgua = vistaAl.marcas.find((m: any) => m.nombre.includes('Agua')) ?? vistaAl.marcas[0]
       const marcaCrema = vistaAl.marcas.find((m: any) => m.nombre.includes('Crema')) ?? vistaAl.marcas[1]
-      const ids = [marcaAgua.id, marcaCrema.id]
 
-      await pedir('POST', '/api/alumno/decisiones', emp.tokenRep, {
-        accion: 'borrador-area', cargo: 'precios',
-        contenido: { precios: [{ marcaId: ids[0], precio: est.precioAgua }, { marcaId: ids[1], precio: est.precioCrema }] },
-      })
-      await pedir('POST', '/api/alumno/decisiones', emp.tokenRep, {
-        accion: 'borrador-area', cargo: 'publicidad',
-        contenido: { publicidades: [{ marcaId: ids[0], publicidad: est.pubAgua }, { marcaId: ids[1], publicidad: est.pubCrema }] },
-      })
-      await pedir('POST', '/api/alumno/decisiones', emp.tokenRep, {
-        accion: 'borrador-area', cargo: 'produccion',
-        contenido: { producciones: [{ marcaId: ids[0], produccion: est.prodAgua }, { marcaId: ids[1], produccion: est.prodCrema }], inversionCapacidad: 0 },
-      })
-      await pedir('POST', '/api/alumno/decisiones', emp.tokenRep, {
-        accion: 'borrador-area', cargo: 'ventas',
-        contenido: { ventas: [{ marcaId: ids[0], vendedores: est.vendedores }, { marcaId: ids[1], vendedores: est.vendedores }] },
-      })
-      await pedir('POST', '/api/alumno/decisiones', emp.tokenRep, {
-        accion: 'borrador-area', cargo: 'investigacion',
-        contenido: { nuevas: [], estudios: [] },
-      })
-      const envio = await pedir<{ areasSinTrabajar: string[] }>('POST', '/api/alumno/decisiones', emp.tokenRep, { accion: 'enviar' })
-      assert(envio.areasSinTrabajar.length === 0, `${emp.nombre}: las 5 áreas trabajadas por su GERENTE`)
-      linea('🧑‍🎓', emp.nombre, `Decisión enviada por su GERENTE — estrategia ${est.nombre} (agua Bs ${est.precioAgua}/L, crema Bs ${est.precioCrema}/L).`)
+      const marcasDe = (dA: number, dC: number): DecisionMarca[] => [
+        { marcaId: marcaAgua.id, precio: dA, publicidad: est.pubAgua, produccion: est.prodAgua, vendedores: est.vendedores },
+        { marcaId: marcaCrema.id, precio: dC, publicidad: est.pubCrema, produccion: est.prodCrema, vendedores: est.vendedores },
+      ]
+
+      // 1) ENVÍO DIRECTO con todo el contenido (5 áreas de una vez)
+      const envio = await enviarDecisionDirecta(emp.tokenRep, marcasDe(est.precioAgua, est.precioCrema))
+      assert(envio.ok, `${emp.nombre}: envío directo aceptado (1 sola llamada, sin borradores)`)
+
+      // 2) REENVÍO (corrección) permitido mientras esté ENVIADA sin visto bueno
+      //    (+0.5 Bs sin tocar el tope del backend, precio máx 60)
+      const precioCorregido = Math.min(est.precioAgua + 0.5, 59.5)
+      const corregida = marcasDe(precioCorregido, est.precioCrema)
+      const reenvio = await enviarDecisionDirecta(emp.tokenRep, corregida)
+      assert(reenvio.ok, `${emp.nombre}: REENVÍO permitido antes del visto bueno (decisión corregida)`)
+      const vistaProfe = await pedir<any>('GET', '/api/profesor/estado', tokenProfe)
+      const eqProfe = vistaProfe.industrias.find((x: any) => x.id === industria.id)!.equipos.find((x: any) => x.id === emp.empresaId)
+      assert(eqProfe.gerente && eqProfe.gerente.length > 0, `${emp.nombre}: el docente ve QUIÉN es el GERENTE (${eqProfe.gerente})`)
+      const precioDocente = eqProfe.contenido?.marcas?.find((m: any) => m.marcaId === marcaAgua.id)?.precio
+      assert(Math.abs(precioDocente - precioCorregido) < 0.01, `${emp.nombre}: el DOCENTE VE el contenido reenviado (agua Bs ${precioDocente})`)
+
+      // 3) Restaurar la estrategia original (otro reenvío) para las aserciones del motor
+      await enviarDecisionDirecta(emp.tokenRep, marcasDe(est.precioAgua, est.precioCrema))
+      linea('🧑‍🎓', emp.nombre, `Decisión enviada DIRECTA por su GERENTE (con reenvío verificado) — estrategia ${est.nombre} (agua Bs ${est.precioAgua}/L, crema Bs ${est.precioCrema}/L).`)
     }
 
-    // Docente aprueba las 8 decisiones
+    // Docente revisa y aprueba las 8 decisiones (viendo el contenido completo)
     estado = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
     const actual = estado.industrias.find((i) => i.id === industria.id)!
     for (const eq of actual.equipos) {
       assert(eq.decisionEstado === 'ENVIADA', `${eq.nombre}: decisión ENVIADA`)
+      assert(Array.isArray(eq.contenido?.marcas) && eq.contenido.marcas.length >= 2, `${eq.nombre}: el docente VE lo que envió el gerente (${eq.contenido.marcas.length} marcas en el contenido)`)
       const r = await pedir('POST', '/api/profesor/aprobar', tokenProfe, { decisionId: eq.decisionId, aprobada: true })
       assert((r as any).estado === 'APROBADA', `${eq.nombre}: visto bueno concedido`)
     }
-    linea('🎓', 'Docente', 'Visto bueno otorgado a las 8 empresas.')
+    linea('🎓', 'Docente', 'Visto bueno otorgado a las 8 empresas tras revisar su contenido completo.')
+
+    // Con el visto bueno, la decisión queda CONGELADA: reenvío rechazado (solo año 1)
+    if (anio === 1) {
+      const primera = resumen[0]
+      let errorCongelada = ''
+      try {
+        await enviarDecisionDirecta(primera.tokenRep, [{ marcaId: 'x', precio: 10, publicidad: 0, produccion: 0, vendedores: [0, 0, 0] }])
+      } catch (e) { errorCongelada = (e as Error).message }
+      assert(errorCongelada.includes('visto bueno'), `decisión con visto bueno CONGELADA (mensaje: ${errorCongelada.slice(0, 70)})`)
+      linea('🔒', 'Regla nueva', `Reenvío tras el visto bueno RECHAZADO (${primera.nombre}): la decisión del año está congelada.`)
+    }
 
     // El motor ejecuta la ronda
     const ronda = await pedir<{ anioProcesado: number; ventasTotales: number; finalizada: boolean }>(

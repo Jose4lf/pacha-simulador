@@ -1,19 +1,19 @@
 // ============================================================
 // PACHA Simulador · Servicio de simulación (BOLIVIA)
 // El "corazón" del sistema: empresas con UN GERENTE cada una (1 jugador),
-// borradores por área decididos SOLO por el GERENTE de la empresa (1 jugador),
-// visto bueno del docente y procesamiento del periodo con el entorno
-// nacional: eventos de Bolivia e inflación (doc §10, §15, §18).
+// decisión del año enviada DIRECTA en un solo envío (sin borradores ni
+// puntaje de trabajo), visto bueno del docente y procesamiento del periodo
+// con el entorno nacional: eventos de Bolivia e inflación (doc §10, §15, §18).
 // Configuración congelada por industria, compatible con simulaciones ya creadas.
 // ============================================================
 
 import { db } from '@/lib/db'
-import { CARGOS, DESEMPENO, ESTUDIOS, ID_CONFIG, esCargoValido, probabilidadExito } from './catalogo'
+import { ESTUDIOS, ID_CONFIG, probabilidadExito } from './catalogo'
 import { crearConfigIndustria, validarConfiguracion, type ConfigIndustria } from './config-bolivia'
 import { generarDatosEstudio, type MarcaContexto } from './estudios'
 import { agruparEfectos, catalogoPorDefecto, elegirEventosAuto, resolverEventosDesdePlan, senalesInflacionDesdeEventos, type EntradaPlan, type EventoDef, type EventoPeriodo } from './eventos'
 import { hashPassword } from './auth'
-import { hash01 } from './hash'
+import { hash01, ruido } from './hash'
 import {
   calcularInflacion, deltaEscenario, indicePrecios, sortearEscenario, tasaComponente, tasaMensualEquivalente,
   type Escenario,
@@ -24,8 +24,8 @@ import {
   PachaError,
   parseDecision,
   parseJson,
-  type BorradorInvestigacion,
   type DecisionContenido,
+  type DecisionNueva,
 } from './tipos'
 
 const CLAVE_DEMO = '321'
@@ -47,6 +47,37 @@ const MARCAS_INICIALES: PlantillaMarca[] = [
   { tipo: 'agua', precio: 21, publicidad: 300, produccion: 380, atributos: [8, 3, 1, 4, 5, 4], vendedores: [90, 10, 8] },
   { tipo: 'crema', precio: 32, publicidad: 380, produccion: 320, atributos: [6, 8, 10, 6, 6, 7], vendedores: [70, 15, 12] },
 ]
+
+/**
+ * Condiciones iniciales REALISTAS y DISTINTAS por empresa: cada firma hereda una
+ * posición levemente diferente del mercado (precio, publicidad, atributos,
+ * fuerza de ventas, awareness y costos), como ocurre con empresas reales.
+ * La variación es determinista (semilla = industria + empresa + marca) para que
+ * reprocesar la misma simulación dé los mismos números.
+ */
+function marcaInicialVariada(
+  plantilla: PlantillaMarca,
+  semilla: string,
+  nombreEmpresa: string,
+  idxMarca: number
+): PlantillaMarca & { awareness: number; costoUnitario: number } {
+  const base = `${semilla}|${nombreEmpresa}|${plantilla.tipo}|${idxMarca}`
+  const attr = plantilla.atributos.map((a, i) =>
+    Math.max(1, Math.min(10, Math.round(a * ruido(`${base}|attr${i}`, 0.18))))
+  )
+  return {
+    ...plantilla,
+    precio: Math.round(plantilla.precio * ruido(`${base}|precio`, 0.08) * 2) / 2, // pasos de Bs 0.50
+    publicidad: Math.round(plantilla.publicidad * ruido(`${base}|pub`, 0.22)),
+    produccion: Math.round(plantilla.produccion * ruido(`${base}|prod`, 0.15)),
+    atributos: attr,
+    vendedores: plantilla.vendedores.map((v, i) => Math.max(1, Math.round(v * ruido(`${base}|vend${i}`, 0.2)))),
+    awareness: Math.round((0.04 + hash01(`${base}|aw`) * 0.06) * 100) / 100, // 4% a 10%
+    costoUnitario: Math.round(
+      (plantilla.tipo === 'agua' ? 10.8 + hash01(`${base}|costo`) * 1.9 : 14.4 + hash01(`${base}|costo`) * 2.6) * 100
+    ) / 100,
+  }
+}
 
 const EQUIPO_COLORES_SAFE = ['#f472b6', '#4ade80', '#facc15', '#c084fc', '#fb923c', '#2dd4bf', '#22d3ee', '#a3e635', '#f87171', '#38bdf8']
 
@@ -94,6 +125,7 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
   const periodos = Math.round(Math.min(20, Math.max(1, opts.periodos ?? 10)))
 
   const config = crearConfigIndustria(empresas.length)
+  const semilla = industriaSeed()
   const industria = await db.industria.create({
     data: {
       nombre: nombre.trim(),
@@ -101,7 +133,7 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
       anioActual: 1,
       anioMaximo: periodos,
       configJson: JSON.stringify(config),
-      semillaEventos: `pacha-${industriaSeed()}`,
+      semillaEventos: `pacha-${semilla}`,
     },
   })
 
@@ -121,8 +153,10 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
       },
     })
 
-    // Dos marcas iniciales: una de AGUA y una de CREMA (doc §1)
-    for (const plantilla of MARCAS_INICIALES) {
+    // Dos marcas iniciales: una de AGUA y una de CREMA (doc §1), con
+    // condiciones heredadas DISTINTAS para cada empresa (variación realista).
+    for (let mi = 0; mi < MARCAS_INICIALES.length; mi++) {
+      const plantilla = marcaInicialVariada(MARCAS_INICIALES[mi], semilla, nombreEquipo, mi)
       await db.marca.create({
         data: {
           equipoId: equipo.id,
@@ -130,11 +164,11 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
           precio: plantilla.precio,
           publicidad: plantilla.publicidad,
           produccion: plantilla.produccion,
-          costoUnitario: plantilla.tipo === 'agua' ? 11.5 : 15.5,
+          costoUnitario: plantilla.costoUnitario,
           atributos: JSON.stringify(plantilla.atributos),
           vendedores: JSON.stringify(plantilla.vendedores),
           inventario: 0,
-          awareness: 0.05,
+          awareness: plantilla.awareness,
           anioLanzamiento: 0,
         },
       })
@@ -156,7 +190,6 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
           usuarioId: usuario.id,
           cargo: 'gerente',
           representante: true,
-          puntos: DESEMPENO.puntosIniciales,
         },
       })
     }
@@ -215,9 +248,6 @@ export async function eliminarIndustria(industriaId: string, profesorId: string)
       await tx.reporte.deleteMany({ where: { equipoId: { in: equipoIds } } })
       await tx.compraEstudio.deleteMany({ where: { equipoId: { in: equipoIds } } })
       await tx.proyectoID.deleteMany({ where: { equipoId: { in: equipoIds } } })
-      await tx.penalizacion.deleteMany({ where: { equipoId: { in: equipoIds } } })
-      await tx.borradorArea.deleteMany({ where: { equipoId: { in: equipoIds } } })
-      await tx.permisoArea.deleteMany({ where: { equipoId: { in: equipoIds } } })
       await tx.decision.deleteMany({ where: { equipoId: { in: equipoIds } } })
       await tx.marca.deleteMany({ where: { equipoId: { in: equipoIds } } })
       // 2) Membresías: los alumnos quedan SIN designación (la cuenta se conserva)
@@ -484,7 +514,8 @@ export async function autocompletarPlan(industriaId: string) {
   return { ok: true, eventosCreados, anios }
 }
 
-/** Genera y persiste los reportes históricos de los 3 años anteriores (Años -2, -1, 0). */
+/** Genera y persiste los reportes históricos de los 3 años anteriores (Años -2, -1, 0),
+ *  con el detalle completo (mercado, mensual, regiones y finanzas reales) por empresa. */
 async function generarHistoriaInicial(industriaId: string) {
   const { config } = await configDeIndustria(industriaId)
   const equipos = await db.equipo.findMany({ where: { industriaId }, include: { marcas: true } })
@@ -503,7 +534,30 @@ async function generarHistoriaInicial(industriaId: string) {
 
   for (const anioHistoria of historia) {
     for (const r of anioHistoria.equipos) {
-      await guardarReporte(r.equipoId, anioHistoria.anio, r, anioHistoria.marcas.filter((m) => m.equipoId === r.equipoId), false)
+      // Detalle REAL del año histórico: mercado, mensual con estacionalidad,
+      // regiones por departamento y estado de resultados completo
+      const detalle = {
+        mercado: anioHistoria.mercado,
+        detalleMensual: anioHistoria.detalleMensual,
+        porRegion: r.porRegion,
+        finanzas: r.finanzas,
+        produccionAnio: r.produccionAnio,
+        marcasMensual: Object.fromEntries(
+          anioHistoria.marcas.filter((m) => m.equipoId === r.equipoId).map((m) => [m.nombre, m.ventasMensual])
+        ),
+        inflacion: null,
+        eventos: [],
+        historico: true,
+      }
+      await guardarReporte(
+        r.equipoId,
+        anioHistoria.anio,
+        r,
+        anioHistoria.marcas.filter((m) => m.equipoId === r.equipoId),
+        false,
+        0,
+        JSON.stringify(detalle)
+      )
     }
     // El awareness de las marcas evoluciona con la publicidad de la historia
     if (anioHistoria.anio === 0) {
@@ -810,6 +864,15 @@ export async function procesarRonda(industriaId: string) {
   const decisionPorEquipo = new Map(decisiones.map((d) => [d.equipoId, d]))
   const equiposSinVistoBueno = industria.equipos.filter((e) => !decisionPorEquipo.has(e.id))
 
+  // Inversión en capacidad (doc §5) desde la DECISIÓN APROBADA de cada empresa
+  const inversionPorEquipo: Record<string, number> = {}
+  for (const d of decisiones) {
+    const c = parseDecision(d.contenido)
+    if (c.inversionCapacidad && c.inversionCapacidad > 0) {
+      inversionPorEquipo[d.equipoId] = clampNum(c.inversionCapacidad, 0, 3000)
+    }
+  }
+
   // 2) Aplicar decisiones aprobadas a las marcas (y proyectos I+D de lanzamiento)
   for (const equipo of industria.equipos) {
     const dec = decisionPorEquipo.get(equipo.id)
@@ -870,15 +933,6 @@ export async function procesarRonda(industriaId: string) {
     inventario: m.inventario,
     awareness: m.awareness,
   }))
-
-  const borradoresProd = await db.borradorArea.findMany({ where: { equipoId: { in: equipoIds }, anio, cargo: 'produccion', enviado: true } })
-  const inversionPorEquipo: Record<string, number> = {}
-  for (const b of borradoresProd) {
-    const contenido = parseJson<{ inversionCapacidad?: number }>(b.contenido, {})
-    if (contenido.inversionCapacidad && contenido.inversionCapacidad > 0) {
-      inversionPorEquipo[b.equipoId] = clampNum(contenido.inversionCapacidad, 0, 3000)
-    }
-  }
 
   const ctx: ContextoAnio = {
     config,
@@ -1087,25 +1141,20 @@ export async function rankingIndustria(industriaId: string) {
   return lista.map((l, i) => ({ ...l, posicion: i + 1 }))
 }
 
-// ===================== Borradores por área (comité) =====================
+// ===================== Decisión del año (envío directo + visto bueno) =====================
 
 function contextoEquipo(equipoId: string) {
   return db.equipo.findUnique({ where: { id: equipoId }, include: { industria: true } })
 }
 
 /**
- * ¿Es este usuario el GERENTE de la empresa (el único que toma decisiones)?
+ * Exige que el usuario sea el GERENTE de la empresa (el único jugador que
+ * toma y envía las decisiones del año).
  */
-export async function esRepresentante(equipoId: string, usuarioId: string): Promise<boolean> {
+export async function requireRepresentante(equipoId: string, usuarioId: string) {
   const membresia = await db.membresia.findUnique({ where: { equipoId_usuarioId: { equipoId, usuarioId } } })
   if (!membresia) throw new PachaError('No eres el GERENTE de ninguna empresa', 403)
-  return membresia.representante
-}
-
-/** Exige que el usuario sea el GERENTE de la empresa para tomar decisiones. */
-async function requireRepresentante(equipoId: string, usuarioId: string) {
-  const ok = await esRepresentante(equipoId, usuarioId)
-  if (!ok) {
+  if (!membresia.representante) {
     throw new PachaError(
       'Solo el GERENTE de la empresa puede tomar y enviar las decisiones (un solo jugador por empresa)',
       403
@@ -1135,51 +1184,20 @@ export async function definirRepresentante(equipoId: string, nuevoRepresentanteI
   return { ok: true, representante: objetivo.usuario.nombre }
 }
 
-/** Guarda y ENVÍA el borrador de una área de la decisión (queda visible para todo el equipo).
- *  Nuevo modelo: SOLO el GERENTE (1 jugador por empresa) toma decisiones;
- *  integrantes pueden consultarlas. */
-export async function guardarBorradorArea(
-  equipoId: string,
-  usuarioId: string,
-  cargo: string,
-  contenido: unknown
-) {
-  if (!esCargoValido(cargo)) throw new PachaError('Cargo inválido')
-  const equipo = await contextoEquipo(equipoId)
-  if (!equipo) throw new PachaError('Equipo no encontrado', 404)
-  if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
-
-  await requireRepresentante(equipoId, usuarioId)
-
-  const anio = equipo.industria.anioActual
-  const decision = await db.decision.findUnique({ where: { equipoId_anio: { equipoId, anio } } })
-  if (decision && decision.estado !== 'BORRADOR') {
-    throw new PachaError('La decisión del año ya fue enviada al docente')
-  }
-
-  const previo = await db.borradorArea.findUnique({
-    where: { equipoId_anio_cargo: { equipoId, anio, cargo } },
-  })
-  const data = {
-    contenido: JSON.stringify(contenido ?? {}),
-    enviado: true,
-    enviadoPorId: usuarioId,
-    enviadoAt: new Date(),
-  }
-  if (previo) {
-    await db.borradorArea.update({ where: { id: previo.id }, data })
-  } else {
-    await db.borradorArea.create({ data: { equipoId, anio, cargo, ...data } })
-  }
-  return { ok: true }
-}
-
 /**
- * Envía la DECISIÓN DEL AÑO al docente: consolida los borradores enviados de las
- * 5 áreas; las áreas sin borrador usan los valores predeterminados (vigentes de
- * las marcas) y quedan marcadas como "sin trabajar".
+ * ENVÍO DIRECTO de la decisión del año al docente (sin borradores ni puntaje
+ * de trabajo): el GERENTE llena las 5 áreas en su pantalla y las envía TODAS
+ * en un solo envío. El contenido viaja completo (precios, publicidad,
+ * producción + inversión en capacidad, fuerza de ventas, marcas nuevas y
+ * estudios) y queda a la espera del visto bueno del docente, que puede ver
+ * todo lo que el gerente envió.
+ *
+ * Mientras la decisión esté ENVIADA (sin visto bueno) el gerente puede
+ * corregirla y REENVIARLA; una vez APROBADA queda congelada para el año.
+ * Cada marca de la decisión se valida y recorta a sus rangos permitidos;
+ * las marcas que falten conservan sus valores vigentes.
  */
-export async function enviarDecision(equipoId: string, usuarioId: string) {
+export async function enviarDecision(equipoId: string, usuarioId: string, contenidoEntrante: unknown) {
   const equipo = await contextoEquipo(equipoId)
   if (!equipo) throw new PachaError('Equipo no encontrado', 404)
   if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
@@ -1195,13 +1213,14 @@ export async function enviarDecision(equipoId: string, usuarioId: string) {
 
   const anio = equipo.industria.anioActual
   const previa = await db.decision.findUnique({ where: { equipoId_anio: { equipoId, anio } } })
-  if (previa && previa.estado !== 'BORRADOR') throw new PachaError('La decisión del año ya fue enviada')
+  if (previa && previa.estado === 'APROBADA') {
+    throw new PachaError('Tu decisión del año ya tiene el visto bueno del docente y está congelada')
+  }
 
+  const entrada = parseJson<Partial<DecisionContenido>>(JSON.stringify(contenidoEntrante ?? {}), {})
+
+  // Base: valores vigentes de cada marca; encima, lo que decidió el gerente
   const marcas = await db.marca.findMany({ where: { equipoId, activa: true }, orderBy: { anioLanzamiento: 'asc' } })
-  const borradores = await db.borradorArea.findMany({ where: { equipoId, anio, enviado: true } })
-  const porCargo = new Map(borradores.map((b) => [b.cargo, parseJson<Record<string, unknown>>(b.contenido, {})]))
-
-  // Valores predeterminados = valores vigentes de cada marca
   const contenido: DecisionContenido = {
     marcas: marcas.map((m) => ({
       marcaId: m.id,
@@ -1214,38 +1233,51 @@ export async function enviarDecision(equipoId: string, usuarioId: string) {
     estudios: [],
   }
 
-  // Aplicar los borradores de cada área sobre los predeterminados
-  const bPrecios = porCargo.get('precios') as { precios?: { marcaId: string; precio: number }[] } | undefined
-  for (const p of bPrecios?.precios ?? []) {
-    const dm = contenido.marcas.find((x) => x.marcaId === p.marcaId)
-    if (dm) dm.precio = clampNum(p.precio, 1, 60)
-  }
-  const bPublicidad = porCargo.get('publicidad') as { publicidades?: { marcaId: string; publicidad: number }[] } | undefined
-  for (const p of bPublicidad?.publicidades ?? []) {
-    const dm = contenido.marcas.find((x) => x.marcaId === p.marcaId)
-    if (dm) dm.publicidad = clampNum(p.publicidad, 0, 5000)
-  }
-  const bProduccion = porCargo.get('produccion') as { producciones?: { marcaId: string; produccion: number }[] } | undefined
-  for (const p of bProduccion?.producciones ?? []) {
-    const dm = contenido.marcas.find((x) => x.marcaId === p.marcaId)
-    if (dm) dm.produccion = clampNum(p.produccion, 0, 20000)
-  }
-  const bVentas = porCargo.get('ventas') as { ventas?: { marcaId: string; vendedores: number[] }[] } | undefined
-  for (const p of bVentas?.ventas ?? []) {
-    const dm = contenido.marcas.find((x) => x.marcaId === p.marcaId)
-    if (dm) dm.vendedores = (p.vendedores ?? []).map((v) => clampNum(Number(v) || 0, 0, 100))
-  }
-  const bProd = porCargo.get('produccion') as { producciones?: { marcaId: string; produccion: number }[]; inversionCapacidad?: number } | undefined
-  if (bProd?.inversionCapacidad && bProd.inversionCapacidad > 0) {
-    contenido.inversionCapacidad = clampNum(bProd.inversionCapacidad, 0, 3000)
-  }
-  const bInvestigacion = porCargo.get('investigacion') as BorradorInvestigacion | undefined
-  if (bInvestigacion) {
-    contenido.nuevas = Array.isArray(bInvestigacion.nuevas) ? bInvestigacion.nuevas : []
-    contenido.estudios = Array.isArray(bInvestigacion.estudios) ? bInvestigacion.estudios : []
+  for (const p of Array.isArray(entrada.marcas) ? entrada.marcas : []) {
+    const dm = contenido.marcas.find((x) => x.marcaId === p?.marcaId)
+    if (!dm) continue
+    dm.precio = clampNum(p.precio, 1, 60)
+    dm.publicidad = clampNum(p.publicidad, 0, 5000)
+    dm.produccion = clampNum(p.produccion, 0, 20000)
+    dm.vendedores = (Array.isArray(p.vendedores) ? p.vendedores : dm.vendedores).map((v) =>
+      clampNum(Number(v) || 0, 0, 100)
+    )
   }
 
-  // Congelar costo de estudios al enviar
+  // Marcas nuevas: SOLO proyectos de I+D APROBADOS de esta empresa
+  const nuevasEntrada = Array.isArray(entrada.nuevas) ? entrada.nuevas : []
+  const nuevasValidas: DecisionNueva[] = []
+  for (const n of nuevasEntrada.slice(0, 8)) {
+    if (!n?.proyectoId || !n?.nombre?.trim()) continue
+    const proyecto = await db.proyectoID.findFirst({
+      where: { id: n.proyectoId, equipoId, estado: 'APROBADO' },
+    })
+    if (!proyecto) continue
+    nuevasValidas.push({
+      nombre: String(n.nombre).trim().slice(0, 24),
+      proyectoId: n.proyectoId,
+      precio: clampNum(n.precio, 1, 60),
+      publicidad: clampNum(n.publicidad, 0, 5000),
+      produccion: clampNum(n.produccion, 0, 20000),
+      vendedores: (Array.isArray(n.vendedores) ? n.vendedores : [10, 5, 3]).map((v) =>
+        clampNum(Number(v) || 0, 0, 100)
+      ),
+    })
+  }
+  contenido.nuevas = nuevasValidas
+
+  // Estudios de mercado: solo ids del catálogo
+  contenido.estudios = (Array.isArray(entrada.estudios) ? entrada.estudios : [])
+    .map((id) => Number(id))
+    .filter((id) => ESTUDIOS.some((e) => e.id === id))
+
+  // Inversión en capacidad nueva (doc §5), en miles de litros
+  if (entrada.inversionCapacidad && Number(entrada.inversionCapacidad) > 0) {
+    contenido.inversionCapacidad = clampNum(Number(entrada.inversionCapacidad), 0, 3000)
+  }
+
+  // Congelar costo de estudios al enviar (y quitar los que ya no están elegidos)
+  const elegidos = new Set(contenido.estudios)
   for (const estudioId of contenido.estudios) {
     const def = ESTUDIOS.find((e) => e.id === estudioId)
     if (!def) continue
@@ -1255,6 +1287,10 @@ export async function enviarDecision(equipoId: string, usuarioId: string) {
       update: { costo: def.costo },
     })
   }
+  const comprasActuales = await db.compraEstudio.findMany({ where: { equipoId, anio } })
+  for (const c of comprasActuales) {
+    if (!elegidos.has(c.estudioId)) await db.compraEstudio.delete({ where: { id: c.id } })
+  }
 
   const data = JSON.stringify(contenido)
   if (previa) {
@@ -1263,12 +1299,12 @@ export async function enviarDecision(equipoId: string, usuarioId: string) {
     await db.decision.create({ data: { equipoId, anio, estado: 'ENVIADA', contenido: data } })
   }
 
-  const cargosEnviados = new Set(borradores.map((b) => b.cargo))
-  const areasSinTrabajar = CARGOS.filter((c) => !cargosEnviados.has(c.id)).map((c) => c.id)
-  return { ok: true, areasSinTrabajar, estudiosComprados: contenido.estudios.length }
+  return { ok: true, estudiosComprados: contenido.estudios.length, marcasNuevas: contenido.nuevas.length }
 }
 
-/** El docente da (o retira) el visto bueno a la decisión del año de una empresa. */
+/** El docente da (o retira) el visto bueno a la decisión del año de una empresa.
+ *  Al darle visto bueno ve el contenido completo que envió el gerente; si se lo
+ *  quita, la decisión vuelve a ENVIADA y el gerente puede corregir y reenviar. */
 export async function aprobarDecision(decisionId: string, profesorId: string, aprobada: boolean) {
   const decision = await db.decision.findUnique({
     where: { id: decisionId },
@@ -1276,7 +1312,6 @@ export async function aprobarDecision(decisionId: string, profesorId: string, ap
   })
   if (!decision) throw new PachaError('Decisión no encontrada', 404)
   if (decision.equipo.industria.profesorId !== profesorId) throw new PachaError('No es tu industria', 403)
-  if (decision.estado === 'BORRADOR') throw new PachaError('La empresa todavía no envió su decisión')
   await db.decision.update({
     where: { id: decision.id },
     data: { estado: aprobada ? 'APROBADA' : 'ENVIADA' },

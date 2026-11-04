@@ -14,7 +14,6 @@ const estado = {
     { usuarioId: 'u1', nombre: 'anamamani', representante: true },
     { usuarioId: 'u2', nombre: 'carlaflores', representante: false },
   ],
-  borradores: [],
   cargos: [],
   proyectos: [],
   reportes: [

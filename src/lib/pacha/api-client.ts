@@ -42,6 +42,8 @@ export interface DecisionContenidoPayload {
   marcas: DecisionMarcaPayload[]
   nuevas: DecisionNuevaPayload[]
   estudios: number[]
+  /** Miles de litros de capacidad nueva (opcional). */
+  inversionCapacidad?: number
 }
 
 export interface CargoFront {
@@ -57,15 +59,6 @@ export interface GerenteComite {
   nombre: string
   /** 👑 Único integrante que toma las decisiones del grupo. */
   representante: boolean
-}
-
-export interface BorradorAreaFront {
-  cargo: string
-  contenido: Record<string, unknown>
-  enviadoPor: string
-  enviadoPorId: string | null
-  enviadoAt: string | null
-  updatedAt: string
 }
 
 export interface ProyectoEstado {
@@ -123,7 +116,6 @@ export interface AlumnoEstado {
   marcas: MarcaEstado[]
   decision: { estado: string; contenido: DecisionContenidoPayload } | null
   comite: GerenteComite[]
-  borradores: BorradorAreaFront[]
   cargos: CargoFront[]
   proyectos: ProyectoEstado[]
   reportes: ReporteResumen[]
@@ -185,14 +177,13 @@ export interface ProfesorIndustria {
     nombre: string
     color: string
     numMarcas: number
+    gerente: string | null
     marcas: { id: string; nombre: string }[]
     integrantes: { usuarioId: string; nombre: string; representante: boolean }[]
     decisionEstado: string
     decisionId: string | null
     aprobada: boolean
     contenido: DecisionContenidoPayload | null
-    areasSinBorrador: string[]
-    areasTrabajadas: string[]
   }[]
   ranking: RankingFila[]
 }
@@ -298,17 +289,12 @@ export const api = {
 
   alumnoEstado: () => request<AlumnoEstado>('/api/alumno/estado'),
 
-  /** Envía el borrador de UNA área del comité (queda visible para todo el equipo). */
-  enviarBorradorArea: (cargo: string, contenido: unknown) =>
-    request<{ ok: boolean }>('/api/alumno/decisiones', {
+  /** ENVÍO DIRECTO de la decisión del año al docente (todo el contenido en un solo envío).
+   *  Mientras el docente no dé el visto bueno, el gerente puede corregir y reenviar. */
+  enviarDecision: (contenido: DecisionContenidoPayload & { inversionCapacidad?: number }) =>
+    request<{ ok: boolean; estudiosComprados: number; marcasNuevas: number }>('/api/alumno/decisiones', {
       method: 'POST',
-      body: JSON.stringify({ accion: 'borrador-area', cargo, contenido }),
-    }),
-  /** Envía la decisión consolidada del año al docente. */
-  enviarDecision: () =>
-    request<{ ok: boolean; areasSinTrabajar: string[]; estudiosComprados: number }>('/api/alumno/decisiones', {
-      method: 'POST',
-      body: JSON.stringify({ accion: 'enviar' }),
+      body: JSON.stringify({ contenido }),
     }),
   registrarProyecto: (nombre: string, atributos: number[], presupuesto: number) =>
     request<{ ok: boolean }>('/api/alumno/proyectos', {

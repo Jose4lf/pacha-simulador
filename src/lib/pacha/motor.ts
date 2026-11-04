@@ -10,6 +10,13 @@
 import type { ConfigIndustria } from './config-bolivia'
 import type { EfectosAgrupados } from './eventos'
 import { clamp, ruido, round1, round2 } from './hash'
+import { createHash } from 'crypto'
+
+/** Hash determinista [0,1) — igual que en hash.ts (ya se usa en este módulo). */
+function hash01(seed: string): number {
+  const h = createHash('sha256').update(seed).digest()
+  return h.readUInt32BE(0) / 0x100000000
+}
 
 export interface MarcaSim {
   marcaId: string
@@ -658,15 +665,27 @@ export interface MarcaHistoria {
 
 /**
  * Historia del mercado previa a la gestión de los estudiantes (Años -2, -1, 0).
- * Participaciones parejas ±15% con leve evolución, producción = ventas,
- * costo de transferencia 55%. El doc §1.2 dimensiona el Año 0 con el Resto
- * del mercado, así que las participaciones se reportan sobre el mercado total.
+ * Participaciones parejas ±15% con leve evolución y variación TAMBIÉN por marca
+ * (cada empresa llega con una posición distinta), estacionalidad mensual real de
+ * helados en Bolivia (verano dic-feb alto, invierno bajo), costos indexados a la
+ * inflación histórica y un estado de resultados completo (logística, promoción,
+ * comisiones, IT, IUE). Producción = ventas, costo de transferencia ~55%.
+ * El doc §1.2 dimensiona el Año 0 con el Resto del mercado, así que las
+ * participaciones se reportan sobre el mercado total.
  */
+export interface HistoriaAnio {
+  anio: number
+  marcas: ResultadoMarca[]
+  equipos: ResultadoEquipo[]
+  mercado: { demandaTotal: number; ventasEmpresas: number; ventasResto: number; capturaEmpresas: number }
+  detalleMensual: { mes: number; demandaTotal: number; ventasEmpresas: number; ventasResto: number }[]
+}
+
 export function reportesHistoria(
   marcas: MarcaHistoria[],
   anios: number[],
   config?: ConfigIndustria
-): { anio: number; marcas: ResultadoMarca[]; equipos: ResultadoEquipo[] }[] {
+): HistoriaAnio[] {
   const porEquipo = new Map<string, MarcaHistoria[]>()
   for (const m of marcas) {
     const arr = porEquipo.get(m.equipoId) ?? []
@@ -680,7 +699,7 @@ export function reportesHistoria(
   const indices: Record<number, number> = {}
   let idx = 100
   for (const a of [...anios].sort((x, y) => x - y)) { indices[a] = idx; idx *= 1.057 }
-  const salida: { anio: number; marcas: ResultadoMarca[]; equipos: ResultadoEquipo[] }[] = []
+  const salida: HistoriaAnio[] = []
 
   const configSegmentos = config?.segmentos.map((s, i) => ({ id: s.id, peso: s.peso, precioIdeal: s.precioIdeal, ideal: s.ideal }))
     ?? [
@@ -691,11 +710,31 @@ export function reportesHistoria(
       { id: 'saludables', peso: 0.1, precioIdeal: 34, ideal: [5, 7, 2, 7, 8, 10] },
     ]
 
+  // Peso de cada región (por habitantes) para repartir las ventas históricas
+  const regionesHistoria = config?.regiones ?? [
+    { id: 'santa_cruz', habitantes: 3122605 },
+    { id: 'la_paz', habitantes: 3030917 },
+    { id: 'cochabamba', habitantes: 2016357 },
+    { id: 'potosi', habitantes: 861292 },
+    { id: 'chuquisaca', habitantes: 606027 },
+    { id: 'oruro', habitantes: 571471 },
+    { id: 'tarija', habitantes: 534210 },
+    { id: 'beni', habitantes: 488260 },
+    { id: 'pando', habitantes: 134194 },
+  ]
+  const pobTotal = regionesHistoria.reduce((s, r) => s + r.habitantes, 0) || 1
+
+  // Estacionalidad mensual de helados en Bolivia: verano (dic-feb) alto, invierno (jun-ago) bajo
+  const ESTACION = [1.18, 1.12, 1.06, 0.96, 0.86, 0.8, 0.84, 0.9, 0.96, 1.02, 1.08, 1.22]
+
   for (const anio of anios) {
     const demandaTotalBase = config
       ? config.mercadoTotalAnio0 * Math.pow(1 + config.macro.crecimientoBase, Math.max(0, anio))
       : 15911.466 * Math.pow(1.04, Math.max(0, anio))
     const indiceAnio = indices[anio] ?? 100
+    // Estacionalidad del mercado con leve variación por año
+    const estAnio = ESTACION.map((v, mes) => v * ruido(`historia|mercado|${anio}|${mes}`, 0.05))
+    const sumaEstAnio = estAnio.reduce((s, v) => s + v, 0)
     const resultados: ResultadoMarca[] = []
 
     for (const [equipoId, ms] of porEquipo) {
@@ -703,15 +742,23 @@ export function reportesHistoria(
       const participacionEquipo = clamp(pesoBase * factorEquipo, 0.05, 0.6)
       const ventasEquipo = demandaTotalBase * captura * participacionEquipo
 
-      for (const m of ms) {
-        const ventas = round1(ventasEquipo / ms.length)
+      // Cada marca pesa distinto dentro de la empresa (variación realista por marca)
+      const factoresMarca = ms.map((m) => ruido(`historia|${anio}|${equipoId}|${m.marcaId}`, 0.28))
+      const sumaMarca = factoresMarca.reduce((s, f) => s + f, 0) || 1
+
+      for (let mi = 0; mi < ms.length; mi++) {
+        const m = ms[mi]
+        const ventas = round1((ventasEquipo * factoresMarca[mi]) / sumaMarca)
         const precioSinIva = m.precio / 1.13
         const ingresos = round1(ventas * precioSinIva)
-        const costos = round1(ingresos * 0.55)
+        const costos = round1(ingresos * (0.52 + hash01(`historia|costo|${anio}|${m.marcaId}`) * 0.08))
         const fuerzaVentas = round1(costoFuerzaVentas(m.vendedores))
         const contribucion = round1(ingresos - costos - m.publicidad - fuerzaVentas)
         const pesosCanal = [0.45, 0.35, 0.20].map((p, i) => p * coberturaCanal(m.vendedores[i] ?? 0, i))
         const sumaC = pesosCanal.reduce((s, p) => s + p, 0) || 1
+        // Estacionalidad con leve variación por marca y año
+        const estMarca = ESTACION.map((v, i) => v * ruido(`historia|est|${anio}|${m.marcaId}|${i}`, 0.08))
+        const sumaEst = estMarca.reduce((s, v) => s + v, 0)
         resultados.push({
           marcaId: m.marcaId,
           equipoId,
@@ -734,8 +781,10 @@ export function reportesHistoria(
             return { canalId: id, ventas: v, ingresos: round1(v * precioSinIva) }
           }),
           sinStock: false,
+          demanda: ventas,
+          ventaPerdida: 0,
           awarenessNueva: round2(clamp(0.05 + 0.1 * Math.sqrt(m.publicidad / 400), 0.05, 0.4)),
-          ventasMensual: Array(12).fill(round1(ventas / 12)),
+          ventasMensual: estMarca.map((v) => round1((ventas * v) / sumaEst)),
           precioReal: round2((100 * m.precio) / indiceAnio),
         })
       }
@@ -743,6 +792,18 @@ export function reportesHistoria(
 
     const ventasTotalesEmpresas = resultados.reduce((s, r) => s + r.ventas, 0)
     const ventasMercadoTotal = demandaTotalBase
+
+    // Mensual agregado de la industria jugable (estacionalidad incluida) y Resto del mercado
+    const detalleMensual = Array.from({ length: 12 }, (_, mes) => {
+      const ventasEmpresasMes = round1(resultados.reduce((s, r) => s + (r.ventasMensual[mes] ?? 0), 0))
+      return {
+        mes: mes + 1,
+        demandaTotal: round1((ventasMercadoTotal * estAnio[mes]) / sumaEstAnio),
+        ventasEmpresas: ventasEmpresasMes,
+        ventasResto: round1(Math.max(0, (ventasMercadoTotal * estAnio[mes]) / sumaEstAnio - ventasEmpresasMes)),
+      }
+    })
+
     const equipos: ResultadoEquipo[] = [...porEquipo.keys()].map((equipoId) => {
       const rs = resultados.filter((r) => r.equipoId === equipoId)
       const ventas = round1(rs.reduce((s, r) => s + r.ventas, 0))
@@ -750,7 +811,26 @@ export function reportesHistoria(
       const costos = round1(rs.reduce((s, r) => s + r.costos, 0))
       const publicidad = round1(rs.reduce((s, r) => s + r.publicidad, 0))
       const fuerzaVentas = round1(rs.reduce((s, r) => s + r.fuerzaVentas, 0))
-      const utilidadNeta = round1(rs.reduce((s, r) => s + r.contribucion, 0) * 0.6)
+      const contribucion = round1(rs.reduce((s, r) => s + r.contribucion, 0))
+
+      // Gastos operativos históricos coherentes con el motor (doc §7-§9)
+      const logistica = round1(0.06 * ingresos)
+      const perdidasCadenaFrio = round1(0.02 * costos)
+      const promocion = round1(0.03 * ingresos)
+      const investigacionMercado = round1(0.05 * ingresos)
+      const comisionVendedores = round1(0.03 * ingresos)
+      const utilidadOperativa = round1(contribucion - logistica - perdidasCadenaFrio - promocion - investigacionMercado - comisionVendedores)
+      const it = round1(0.03 * ingresos)
+      const utilidadAntesIUE = round1(utilidadOperativa - it)
+      const iue = round1(Math.max(0, 0.25 * utilidadAntesIUE))
+      const utilidadNeta = round1(utilidadAntesIUE - iue)
+
+      // Ventas históricas repartidas por población de cada departamento
+      const porRegion = regionesHistoria.map((r) => ({
+        regionId: r.id,
+        ventas: round1(ventas * (r.habitantes / pobTotal)),
+      }))
+
       return {
         equipoId,
         ventas,
@@ -758,23 +838,41 @@ export function reportesHistoria(
         costos,
         publicidad,
         fuerzaVentas,
-        contribucion: round1(rs.reduce((s, r) => s + r.contribucion, 0)),
+        contribucion,
         participacion: ventasTotalesEmpresas > 0 ? round2((ventas / ventasTotalesEmpresas) * 100) : 0,
         participacionTotal: ventasMercadoTotal > 0 ? round2((ventas / ventasMercadoTotal) * 100) : 0,
-        porRegion: [],
+        porRegion,
         finanzas: {
           ingresosBrutos: round1(ingresos * 1.13), ingresosNetos: ingresos, iva: round1(ingresos * 0.13),
-          costoProductos: costos, almacenamiento: 0, logistica: 0, perdidasCadenaFrio: 0,
-          promocion: 0, investigacionMercado: 0, comisionVendedores: 0, publicidad, fuerzaVentas,
-          costoCapacidad: 0, utilidadOperativa: round1(rs.reduce((s, r) => s + r.contribucion, 0)),
-          margenBruto: 0, margenOperativo: 0, intereses: 0, it: 0, iue: 0,
-          utilidadNeta, deudaFinal: 0, endeudamientoAviso: false, roi: 0,
+          costoProductos: costos, almacenamiento: 0, logistica, perdidasCadenaFrio,
+          promocion, investigacionMercado, comisionVendedores, publicidad, fuerzaVentas,
+          costoCapacidad: 0, utilidadOperativa,
+          margenBruto: ingresos > 0 ? round2((ingresos - costos) / ingresos) : 0,
+          margenOperativo: ingresos > 0 ? round2(utilidadOperativa / ingresos) : 0,
+          intereses: 0, it, iue,
+          utilidadNeta, deudaFinal: 0, endeudamientoAviso: false,
+          roi: ingresos > 0 ? round2(utilidadNeta / ingresos) : 0,
         },
-        produccionAnio: { capacidadInstalada: 1000, capacidadUtilizada: ventas, utilizacionPct: round2((ventas / 1000) * 100), merma: 0, inversionCapacidad: 0, inventarioFinal: 0, quiebresStock: 0 },
+        produccionAnio: {
+          capacidadInstalada: 1000, capacidadUtilizada: ventas,
+          utilizacionPct: round2((ventas / 1000) * 100), merma: 0,
+          inversionCapacidad: 0, inventarioFinal: 0, quiebresStock: 0,
+        },
       }
     })
 
-    salida.push({ anio, marcas: resultados, equipos })
+    salida.push({
+      anio,
+      marcas: resultados,
+      equipos,
+      mercado: {
+        demandaTotal: round1(ventasMercadoTotal),
+        ventasEmpresas: round1(ventasTotalesEmpresas),
+        ventasResto: round1(Math.max(0, ventasMercadoTotal - ventasTotalesEmpresas)),
+        capturaEmpresas: ventasMercadoTotal > 0 ? round2((ventasTotalesEmpresas / ventasMercadoTotal) * 100) : 0,
+      },
+      detalleMensual,
+    })
   }
 
   return salida

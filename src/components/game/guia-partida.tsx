@@ -218,8 +218,8 @@ function FaseAlumnos() {
         <Paso n={2}>
           En <b className="text-zinc-100">Decisiones</b> el gerente decide las 5 áreas: precios por marca,
           presupuesto de publicidad, producción e inversión en capacidad, vendedores por canal, y estudios
-          + proyectos de I+D. Guarda los borradores y envía la
-          decisión. Los números de cada área están en «Reportes → Reportes por área».
+          + proyectos de I+D. Envía todo de una vez con «Enviar decisión del año» (sin borradores ni
+          puntajes). El resumen de la decisión queda en la pestaña «Grupo».
         </Paso>
         <Paso n={3}>
           En <b className="text-zinc-100">Reportes</b> el gerente analiza los resultados: resumen del
@@ -253,26 +253,25 @@ function FaseRonda() {
           anunciado.
         </Paso>
         <Paso n={2}>
-          <b className="text-zinc-100">Alumnos — Borradores por área:</b> el GERENTE define las
-          decisiones de cada área (ej.: precio Bs 12-18 por litro, publicidad en miles de
-          Bs, producción según capacidad, vendedores en tiendas/supermercados/kioscos) y pulsa «Guardar
-          borrador del área». El I+D además compra estudios de mercado y registra proyectos.
+          <b className="text-zinc-100">Alumnos — Decidir:</b> el GERENTE llena las 5 áreas (ej.: precio
+          Bs 12-18 por litro, publicidad en miles de Bs, producción según capacidad, vendedores en
+          tiendas/supermercados/kioscos). El I+D además compra estudios de mercado y registra proyectos.
         </Paso>
         <Paso n={3}>
-          <b className="text-zinc-100">Alumnos — Grupo:</b> la pestaña de gerencia muestra las decisiones
-          de cada área <b>en cifras</b> (precio, presupuesto, producción, vendedores). El gerente revisa,
-          analiza y ajusta antes del envío final.
+          <b className="text-zinc-100">Alumnos — Enviar decisión (directo):</b> el GERENTE pulsa «Enviar
+          decisión del año» y <b>TODO</b> viaja en un solo envío (sin borradores ni áreas “sin trabajar”).
+          Mientras el docente no dé el visto bueno, puede corregir cualquier valor y <b>reenviar</b>.
         </Paso>
         <Paso n={4}>
-          <b className="text-zinc-100">Alumnos — Enviar decisión:</b> el GERENTE pulsa «Enviar
-          decisión al docente». El sistema consolida los 5 borradores; un área sin borrador usa los
-          valores vigentes y queda marcada «sin trabajar».
+          <b className="text-zinc-100">Docente — Visto bueno con contenido:</b> el docente abre la decisión
+          de cada empresa y ve <b>todo lo que envió el gerente</b> (precios, publicidad, producción,
+          vendedores, estudios, marcas nuevas e inversión). Da (o quita) el visto bueno.
         </Paso>
         <Paso n={5}>
-          <b className="text-zinc-100">Docente — Aprobar y ejecutar:</b> revisa la decisión de cada empresa
-          y le da el visto bueno. Con todas aprobadas, pulsa «Ejecutar ronda»: el motor calcula el año mes
-          a mes (demanda por segmento y región, eventos, inflación, capacidad, inventario, impuestos IT e
-          IUE).
+          <b className="text-zinc-100">Docente — Ejecutar ronda:</b> con las decisiones aprobadas, pulsa
+          «Ejecutar ronda»: el motor calcula el año mes a mes (demanda por segmento y región, eventos,
+          inflación, capacidad, inventario, impuestos IT e IUE). Las empresas sin visto bueno juegan con
+          sus valores vigentes.
         </Paso>
         <Paso n={6}>
           <b className="text-zinc-100">Todos — Reportes del año:</b> el gerente revisa sus números (ventas,

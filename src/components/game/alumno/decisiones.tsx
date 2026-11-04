@@ -61,8 +61,9 @@ function cobertura(v: number, i: number): number {
   return Math.min(100, (v / CANALES[i].vendedoresNecesarios) * 100)
 }
 
-/** Estado local de edición: valores vigentes + overrides de los borradores ya enviados. */
-function construirBorrador(estado: AlumnoEstado): DecisionContenidoPayload {
+/** Estado local de edición: valores vigentes de las marcas + lo que el gerente
+ *  ya envió (si la decisión está ENVIADA puede corregir y reenviar). */
+function construirDecision(estado: AlumnoEstado): DecisionContenidoPayload {
   const marcas = estado.marcas.map((m) => ({
     marcaId: m.id,
     precio: m.precio,
@@ -71,38 +72,23 @@ function construirBorrador(estado: AlumnoEstado): DecisionContenidoPayload {
     vendedores: normalizarVendedores(m.vendedores),
   }))
 
-  for (const b of estado.borradores) {
-    const c = b.contenido as Record<string, unknown>
-    if (b.cargo === 'precios' && Array.isArray(c.precios)) {
-      for (const p of c.precios as { marcaId: string; precio: number }[]) {
+  const c = estado.decision?.contenido
+  if (c) {
+    if (Array.isArray(c.marcas)) {
+      for (const p of c.marcas) {
         const m = marcas.find((x) => x.marcaId === p.marcaId)
-        if (m) m.precio = p.precio
+        if (!m) continue
+        m.precio = p.precio
+        m.publicidad = p.publicidad
+        m.produccion = p.produccion
+        if (Array.isArray(p.vendedores)) m.vendedores = normalizarVendedores(p.vendedores)
       }
     }
-    if (b.cargo === 'publicidad' && Array.isArray(c.publicidades)) {
-      for (const p of c.publicidades as { marcaId: string; publicidad: number }[]) {
-        const m = marcas.find((x) => x.marcaId === p.marcaId)
-        if (m) m.publicidad = p.publicidad
-      }
-    }
-    if (b.cargo === 'produccion' && Array.isArray(c.producciones)) {
-      for (const p of c.producciones as { marcaId: string; produccion: number }[]) {
-        const m = marcas.find((x) => x.marcaId === p.marcaId)
-        if (m) m.produccion = p.produccion
-      }
-    }
-    if (b.cargo === 'ventas' && Array.isArray(c.ventas)) {
-      for (const p of c.ventas as { marcaId: string; vendedores: number[] }[]) {
-        const m = marcas.find((x) => x.marcaId === p.marcaId)
-        if (m) m.vendedores = normalizarVendedores(p.vendedores)
-      }
-    }
+    const nuevas = (Array.isArray(c.nuevas) ? c.nuevas : []).map((n) => ({ ...n, vendedores: normalizarVendedores(n.vendedores) }))
+    return { marcas, nuevas, estudios: [...(Array.isArray(c.estudios) ? c.estudios : [])], inversionCapacidad: c.inversionCapacidad }
   }
 
-  const inv = estado.borradores.find((b) => b.cargo === 'investigacion')
-  const cInv = (inv?.contenido ?? {}) as { nuevas?: DecisionNuevaPayload[]; estudios?: number[] }
-  const nuevas = (cInv.nuevas ?? []).map((n) => ({ ...n, vendedores: normalizarVendedores(n.vendedores) }))
-  return { marcas, nuevas, estudios: [...(cInv.estudios ?? [])] }
+  return { marcas, nuevas: [], estudios: [] }
 }
 
 /* ============ Control slider + input numérico ============ */
@@ -217,78 +203,21 @@ function VendedoresControl({
 
 function AreaCard({
   cargo,
-  enviadoPor,
-  bloqueada,
-  /** Modo consulta: solo el GERENTE edita; (la empresa juega con un solo jugador). */
-  modoConsulta,
   children,
-  onEnviar,
-  enviando,
 }: {
   cargo: { id: string; nombre: string; emoji: string; descripcion: string }
-  enviadoPor?: string
-  bloqueada: boolean
-  modoConsulta?: boolean
   children: React.ReactNode
-  onEnviar: () => Promise<void>
-  enviando: boolean
 }) {
-  const enviado = Boolean(enviadoPor)
   return (
-    <section
-      aria-label={`Área ${cargo.nombre}`}
-      className={`pacha-panel p-4 sm:p-5 ${modoConsulta ? 'opacity-95' : ''}`}
-    >
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-white/10 pb-3">
-        <div className="min-w-0">
-          <h3 className="flex items-center gap-2 text-base font-black text-zinc-100">
-            <span className="text-xl" aria-hidden="true">{cargo.emoji}</span>
-            {cargo.nombre}
-          </h3>
-          <p className="mt-0.5 text-[11px] text-zinc-500">{cargo.descripcion}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1.5">
-          {modoConsulta && !bloqueada ? (
-            <Badge className="border border-sky-400/40 bg-sky-400/10 text-[10px] font-bold text-sky-300">
-              👁️ Consulta · decide el representante
-            </Badge>
-          ) : null}
-          {enviado ? (
-            <Badge className="border border-emerald-400/40 bg-emerald-400/10 text-[10px] text-emerald-300">
-              <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" /> Borrador enviado{enviadoPor ? ` por ${enviadoPor}` : ''}
-            </Badge>
-          ) : bloqueada ? (
-            <Badge className="border border-zinc-400/30 bg-zinc-400/10 text-[10px] text-zinc-300">
-              Sin borrador · valores predeterminados
-            </Badge>
-          ) : (
-            <Badge className="border border-red-400/40 bg-red-400/10 text-[10px] text-red-300">⚠️ Sin trabajar</Badge>
-          )}
-          {!bloqueada && !modoConsulta && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => void onEnviar()}
-              disabled={enviando}
-              className="h-8 border border-emerald-400/40 bg-emerald-400/15 px-3 text-[11px] font-bold text-emerald-200 hover:bg-emerald-400/25"
-            >
-              {enviando ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              ) : (
-                <Send className="h-3.5 w-3.5" aria-hidden="true" />
-              )}
-              {enviado ? 'Actualizar borrador' : 'Guardar borrador del área'}
-            </Button>
-          )}
-        </div>
+    <section aria-label={`Área ${cargo.nombre}`} className="pacha-panel p-4 sm:p-5">
+      <div className="mb-3 border-b border-white/10 pb-3">
+        <h3 className="flex items-center gap-2 text-base font-black text-zinc-100">
+          <span className="text-xl" aria-hidden="true">{cargo.emoji}</span>
+          {cargo.nombre}
+        </h3>
+        <p className="mt-0.5 text-[11px] text-zinc-500">{cargo.descripcion}</p>
       </div>
-      {modoConsulta && !bloqueada ? (
-        <div className="pointer-events-none select-none opacity-80">
-          {children}
-        </div>
-      ) : (
-        children
-      )}
+      {children}
     </section>
   )
 }
@@ -304,30 +233,27 @@ export function AlumnoDecisiones({
 }) {
   const anio = estado.industria.anioActual
   const decisionEstado = estado.decision?.estado ?? null
-  const bloqueada = decisionEstado === 'ENVIADA' || decisionEstado === 'APROBADA'
+  /** Solo se congela con el visto bueno; si está ENVIADA el gerente puede corregir y reenviar. */
+  const bloqueada = decisionEstado === 'APROBADA'
+  const yaEnviada = decisionEstado === 'ENVIADA'
 
-  // Nuevo modelo: todos los integrantes VEN todas las áreas y todos los datos;
-  // SOLO el GERENTE edita y envía las decisiones (un jugador por empresa).
+  // Nuevo modelo: la empresa juega con UN solo jugador (el GERENTE). Si existiera
+  // otro integrante, vería todo en modo consulta; el GERENTE edita y envía.
   const esRepresentante = estado.membresia?.esRepresentante ?? false
   const modoConsulta = !esRepresentante && !bloqueada
 
-  // Borrador local; se reconstruye si cambia el año, la decisión o algún borrador de área.
-  const claveBorrador = `${anio}:${decisionEstado ?? 'sin-decision'}:${estado.borradores.map((b) => b.updatedAt).join(',')}`
-  const [claveMontada, setClaveMontada] = useState(claveBorrador)
-  const [contenido, setContenido] = useState<DecisionContenidoPayload>(() => construirBorrador(estado))
-  if (claveBorrador !== claveMontada) {
-    setClaveMontada(claveBorrador)
-    setContenido(construirBorrador(estado))
+  // Decisión local; se reconstruye si cambia el año o el estado de la decisión.
+  const claveDecision = `${anio}:${decisionEstado ?? 'sin-decision'}`
+  const [claveMontada, setClaveMontada] = useState(claveDecision)
+  const [contenido, setContenido] = useState<DecisionContenidoPayload>(() => construirDecision(estado))
+  if (claveDecision !== claveMontada) {
+    setClaveMontada(claveDecision)
+    setContenido(construirDecision(estado))
   }
 
-  const [enviandoCargo, setEnviandoCargo] = useState<string | null>(null)
   const [enviandoFinal, setEnviandoFinal] = useState(false)
 
   const cargos = estado.cargos
-  const borradorDe = useMemo(
-    () => new Map(estado.borradores.map((b) => [b.cargo, b])),
-    [estado.borradores]
-  )
 
   const aprobados = useMemo(
     () => estado.proyectos.filter((p) => p.estado === 'APROBADO'),
@@ -389,58 +315,29 @@ export function AlumnoDecisiones({
     }))
   }
 
-  const [inversionCapacidad, setInversionCapacidad] = useState(0)
+  const [inversionCapacidad, setInversionCapacidad] = useState(estado.decision?.contenido?.inversionCapacidad ?? 0)
   /** Texto visible del input de inversión: SOLO dígitos (nunca letras ni símbolos). */
-  const [textoInversion, setTextoInversion] = useState('0')
+  const [textoInversion, setTextoInversion] = useState(String(estado.decision?.contenido?.inversionCapacidad ?? 0))
 
-  /** Envía el borrador de UNA área con los valores actuales del editor. */
-  async function enviarArea(cargoId: string) {
-    setEnviandoCargo(cargoId)
-    try {
-      if (cargoId === 'precios') {
-        await api.enviarBorradorArea('precios', {
-          precios: contenido.marcas.map((m) => ({ marcaId: m.marcaId, precio: m.precio })),
-        })
-      } else if (cargoId === 'publicidad') {
-        await api.enviarBorradorArea('publicidad', {
-          publicidades: contenido.marcas.map((m) => ({ marcaId: m.marcaId, publicidad: m.publicidad })),
-        })
-      } else if (cargoId === 'produccion') {
-        await api.enviarBorradorArea('produccion', {
-          producciones: contenido.marcas.map((m) => ({ marcaId: m.marcaId, produccion: m.produccion })),
-          inversionCapacidad: inversionCapacidad > 0 ? inversionCapacidad : undefined,
-        })
-      } else if (cargoId === 'ventas') {
-        await api.enviarBorradorArea('ventas', {
-          ventas: contenido.marcas.map((m) => ({ marcaId: m.marcaId, vendedores: m.vendedores })),
-        })
-      } else if (cargoId === 'investigacion') {
-        await api.enviarBorradorArea('investigacion', {
-          nuevas: contenido.nuevas,
-          estudios: contenido.estudios,
-        })
-      }
-      toast({ title: '📤 Borrador enviado al comité', description: 'El equipo ya puede revisar esta área.' })
-      await refresh()
-    } catch (e) {
-      toast({ title: 'No se pudo enviar el borrador', description: msg(e), variant: 'destructive' })
-    } finally {
-      setEnviandoCargo(null)
-    }
-  }
-
-  /** Envía la decisión consolidada del año al docente. */
+  /** ENVÍO DIRECTO: toda la decisión del año viaja completa en un solo envío. */
   async function enviarFinal() {
     setEnviandoFinal(true)
     try {
-      const res = await api.enviarDecision()
-      const sin = res.areasSinTrabajar.length
+      await api.enviarDecision({
+        marcas: contenido.marcas.map((m) => ({
+          marcaId: m.marcaId,
+          precio: m.precio,
+          publicidad: m.publicidad,
+          produccion: m.produccion,
+          vendedores: m.vendedores,
+        })),
+        nuevas: contenido.nuevas,
+        estudios: contenido.estudios,
+        inversionCapacidad: inversionCapacidad > 0 ? inversionCapacidad : undefined,
+      })
       toast({
         title: '🚀 ¡Decisión del año enviada!',
-        description:
-          sin > 0
-            ? `Año ${anio} congelado · ${sin} área(s) quedó "sin trabajar" con valores predeterminados.`
-            : `Año ${anio} congelado · las 5 áreas trabajaron. Esperando el visto bueno del docente.`,
+        description: `Año ${anio} enviado al docente con TODAS las áreas. Esperando el visto bueno; puedes corregir y reenviar hasta que lo apruebe.`,
       })
       await refresh()
     } catch (e) {
@@ -450,33 +347,21 @@ export function AlumnoDecisiones({
     }
   }
 
-  const cargosSinEnviar = cargos.filter((c) => !borradorDe.has(c.id))
-
-  /* ---------- Vista SOLO LECTURA (decisión enviada / aprobada) ---------- */
+  /* ---------- Vista SOLO LECTURA (decisión con visto bueno) ---------- */
   if (bloqueada) {
     const c = estado.decision?.contenido
     return (
       <div className="space-y-4">
         <div
           role="status"
-          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-bold ${
-            decisionEstado === 'APROBADA'
-              ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-200'
-              : 'border-amber-400/40 bg-amber-400/10 text-amber-200'
-          }`}
+          className="flex items-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-sm font-bold text-emerald-200"
         >
-          {decisionEstado === 'APROBADA' ? (
-            <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
-          ) : (
-            <Lock className="h-4 w-4 shrink-0" aria-hidden="true" />
-          )}
-          {decisionEstado === 'APROBADA'
-            ? `✅ Visto bueno del docente para el Año ${anio} — cuando corra la simulación verán los reportes`
-            : `🔒 Decisión enviada para el Año ${anio} — esperando el visto bueno del docente`}
+          <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {`✅ Visto bueno del docente para el Año ${anio} — cuando corra la simulación verán los reportes`}
         </div>
 
         <p className="text-xs text-zinc-500">
-          Estos son los valores congelados para esta ronda. Podrán decidir de nuevo cuando avance el año.
+          Estos son los valores congelados para esta ronda. Podrás decidir de nuevo cuando avance el año.
         </p>
 
         <div className="grid gap-4 xl:grid-cols-2">
@@ -585,11 +470,6 @@ export function AlumnoDecisiones({
       {/* 💰 ÁREA PRECIOS */}
       <AreaCard
         cargo={cargos.find((c) => c.id === 'precios')!}
-        enviadoPor={borradorDe.get('precios')?.enviadoPor}
-        bloqueada={bloqueada}
-        modoConsulta={modoConsulta}
-        enviando={enviandoCargo === 'precios'}
-        onEnviar={() => enviarArea('precios')}
       >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
@@ -622,11 +502,6 @@ export function AlumnoDecisiones({
       {/* 📺 ÁREA PUBLICIDAD */}
       <AreaCard
         cargo={cargos.find((c) => c.id === 'publicidad')!}
-        enviadoPor={borradorDe.get('publicidad')?.enviadoPor}
-        bloqueada={bloqueada}
-        modoConsulta={modoConsulta}
-        enviando={enviandoCargo === 'publicidad'}
-        onEnviar={() => enviarArea('publicidad')}
       >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
@@ -660,11 +535,6 @@ export function AlumnoDecisiones({
       {/* 🏭 ÁREA PRODUCCIÓN */}
       <AreaCard
         cargo={cargos.find((c) => c.id === 'produccion')!}
-        enviadoPor={borradorDe.get('produccion')?.enviadoPor}
-        bloqueada={bloqueada}
-        modoConsulta={modoConsulta}
-        enviando={enviandoCargo === 'produccion'}
-        onEnviar={() => enviarArea('produccion')}
       >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
@@ -725,11 +595,6 @@ export function AlumnoDecisiones({
       {/* 🚚 ÁREA DISTRIBUCIÓN Y VENTAS */}
       <AreaCard
         cargo={cargos.find((c) => c.id === 'ventas')!}
-        enviadoPor={borradorDe.get('ventas')?.enviadoPor}
-        bloqueada={bloqueada}
-        modoConsulta={modoConsulta}
-        enviando={enviandoCargo === 'ventas'}
-        onEnviar={() => enviarArea('ventas')}
       >
         <div className="grid gap-4 xl:grid-cols-2">
           {estado.marcas.map((m) => {
@@ -752,11 +617,6 @@ export function AlumnoDecisiones({
       {/* 🔬 ÁREA INVESTIGACIÓN Y DESARROLLO */}
       <AreaCard
         cargo={cargos.find((c) => c.id === 'investigacion')!}
-        enviadoPor={borradorDe.get('investigacion')?.enviadoPor}
-        bloqueada={bloqueada}
-        modoConsulta={modoConsulta}
-        enviando={enviandoCargo === 'investigacion'}
-        onEnviar={() => enviarArea('investigacion')}
       >
         <div className="space-y-4">
           {/* Estudios de mercado */}
@@ -856,7 +716,7 @@ export function AlumnoDecisiones({
     </>
   )
 
-  /* ---------- Vista editable (solo el representante decide; todos consultan) ---------- */
+  /* ---------- Vista editable (el GERENTE decide y envía directo) ---------- */
   return (
     <div className="space-y-5 pb-4">
       <div>
@@ -865,8 +725,9 @@ export function AlumnoDecisiones({
         </h2>
         {esRepresentante ? (
           <p className="mt-0.5 text-sm text-zinc-400">
-            👑 Eres el <b className="text-amber-300">GERENTE</b> de la empresa (el único jugador): decide las 5 áreas,
-            guarda cada borrador y envía la decisión del año al docente.
+            👑 Eres el <b className="text-amber-300">GERENTE</b> de la empresa (el único jugador): decide las 5 áreas
+            y envía todo con el botón <b className="text-emerald-300">Enviar decisión del año</b> — sin borradores,
+            en un solo envío directo al docente.
           </p>
         ) : (
           <p className="mt-0.5 text-sm text-zinc-400">
@@ -877,9 +738,19 @@ export function AlumnoDecisiones({
         )}
       </div>
 
+      {yaEnviada && (
+        <div
+          role="status"
+          className="flex items-center gap-2 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-200"
+        >
+          <Send className="h-4 w-4 shrink-0" aria-hidden="true" />
+          {`Ya enviaste la decisión del Año ${anio} — el docente la está revisando. Puedes corregir cualquier valor y REENVIAR hasta que dé el visto bueno.`}
+        </div>
+      )}
+
       {tarjetas}
 
-      {/* Barra sticky de inversión + envío final (solo representante) */}
+      {/* Barra sticky de inversión + envío directo (solo representante) */}
       <div className="sticky bottom-0 z-20 -mx-3 mt-2 border-t border-white/10 bg-[#140f1c]/90 px-3 py-3 backdrop-blur sm:-mx-6 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -889,11 +760,6 @@ export function AlumnoDecisiones({
             <p className="text-xl font-black text-amber-300">{fmtBs(inversion)}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {!bloqueada && cargosSinEnviar.length > 0 && (
-              <span className="text-[11px] font-semibold text-red-300">
-                ⚠️ {cargosSinEnviar.length} área(s) sin borrador: {cargosSinEnviar.map((c) => c.corto).join(', ')}
-              </span>
-            )}
             {!esRepresentante ? (
               <span className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-[11px] font-bold text-sky-300">
                 👁️ Modo consulta: el GERENTE envía la decisión del año
@@ -911,38 +777,26 @@ export function AlumnoDecisiones({
                   ) : (
                     <Rocket className="h-4 w-4" aria-hidden="true" />
                   )}
-                  🚀 Enviar decisión del año
+                  {yaEnviada ? '🔁 Reenviar decisión del año' : '🚀 Enviar decisión del año'}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent className="border-white/10 bg-[#1c1528] text-zinc-100">
                 <AlertDialogHeader>
-                  <AlertDialogTitle className="text-zinc-100">¿Enviar la decisión del Año {anio} al docente?</AlertDialogTitle>
+                  <AlertDialogTitle className="text-zinc-100">
+                    {yaEnviada ? `¿Reenviar la decisión del Año ${anio}?` : `¿Enviar la decisión del Año ${anio} al docente?`}
+                  </AlertDialogTitle>
                   <AlertDialogDescription asChild>
                     <div className="space-y-2 text-zinc-400">
                       <p>
-                        Se consolidan los borradores de las 5 áreas. Las áreas sin borrador usarán los valores
-                        predeterminados y quedarán <b className="text-red-300">sin trabajar</b> (el representante
-                        perderá puntos de desempeño).
+                        Se envía <b className="text-zinc-100">TODO</b> de una vez (sin borradores): precios,
+                        publicidad, producción, fuerza de ventas, marcas nuevas, estudios e inversión en capacidad.
+                        El docente verá el contenido completo y dará (o quitará) el visto bueno.
                       </p>
-                      <ul className="space-y-1">
-                        {cargos.map((cg) => {
-                          const enviada = borradorDe.has(cg.id)
-                          return (
-                            <li key={cg.id} className="flex items-center gap-2">
-                              {enviada ? (
-                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-400" aria-hidden="true" />
-                              ) : (
-                                <X className="h-3.5 w-3.5 shrink-0 text-red-400" aria-hidden="true" />
-                              )}
-                              <span>
-                                {cg.emoji} {cg.nombre} —{' '}
-                                {enviada
-                                  ? `borrador guardado por ${borradorDe.get(cg.id)?.enviadoPor}`
-                                  : 'sin trabajar (predeterminado)'}
-                              </span>
-                            </li>
-                          )
-                        })}
+                      <ul className="space-y-1 text-xs">
+                        <li>💰 {contenido.marcas.length} marca(s) con precio · 📺 publicidad total {fmtBs(contenido.marcas.reduce((s, m) => s + m.publicidad, 0))}</li>
+                        <li>🏭 producción total {fmtU(contenido.marcas.reduce((s, m) => s + m.produccion, 0))}{inversionCapacidad > 0 ? ` · 🏗️ +${inversionCapacidad.toLocaleString('es-BO')} mil L de capacidad` : ''}</li>
+                        <li>🚚 fuerza de ventas {fmtBs([...contenido.marcas, ...contenido.nuevas].reduce((s, m) => s + fuerzaVentas(m.vendedores), 0))}</li>
+                        <li>🔬 {contenido.estudios.length} estudio(s) · 🌟 {contenido.nuevas.length} marca(s) nueva(s)</li>
                       </ul>
                       <p>
                         Inversión estimada: <b className="text-amber-300">{fmtBs(inversion)}</b>.

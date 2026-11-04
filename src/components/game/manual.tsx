@@ -29,7 +29,7 @@ interface Capitulo {
 
 const CAPITULOS: Capitulo[] = [
   { id: 'bienvenida', emoji: '🍦', titulo: 'Bienvenida' },
-  { id: 'comite', emoji: '👥', titulo: 'El comité y los borradores' },
+  { id: 'comite', emoji: '👑', titulo: 'La gerencia y el visto bueno' },
   { id: 'mercado', emoji: '🗺️', titulo: 'El mercado' },
   { id: 'bolivia', emoji: '🇧🇴', titulo: 'Bolivia: mercado, eventos e inflación' },
   { id: 'decisiones', emoji: '🎛️', titulo: 'Tus decisiones' },
@@ -176,10 +176,10 @@ function Chip({ children, color = 'pink' }: { children: React.ReactNode; color?:
 
 function CapBienvenida() {
   const pasos = [
-    { n: 1, t: 'El GERENTE decide', d: 'Cada empresa la juega UN solo jugador: el GERENTE 👑 analiza y decide las 5 áreas (precios, publicidad, producción, distribución o I+D) y guarda los borradores.' },
-    { n: 2, t: 'El gerente revisa', d: 'Todo queda en la pestaña Gerencia/Grupo. Si un área no se trabajó, se verá “sin trabajar” con valores predeterminados.' },
-    { n: 3, t: 'Envío al docente', d: 'El GERENTE envía la decisión del año. El docente la revisa y da el visto bueno.' },
-    { n: 4, t: 'El profesor corre el año', d: 'El motor simula el mercado y genera los reportes del año. Después, todos analizan y se repite el ciclo.' },
+    { n: 1, t: 'El GERENTE decide', d: 'Cada empresa la juega UN solo jugador: el GERENTE 👑 analiza y decide las 5 áreas (precios, publicidad, producción, distribución e I+D) directamente en la pestaña Decisiones.' },
+    { n: 2, t: 'Envío directo', d: 'Sin borradores ni puntos: el GERENTE pulsa “Enviar decisión del año” y TODO viaja al docente en un solo envío (el costo de los estudios se congela al enviar).' },
+    { n: 3, t: 'Visto bueno del docente', d: 'El docente ve el contenido completo de lo que enviaste (precios, publicidad, producción, ventas, I+D) y da el visto bueno. Si aún no lo aprueba, puedes corregir y reenviar.' },
+    { n: 4, t: 'El profesor corre el año', d: 'El motor simula el mercado con las decisiones aprobadas y genera los reportes del año. Después, todos analizan y se repite el ciclo.' },
   ]
   return (
     <div>
@@ -239,7 +239,7 @@ function CapBienvenida() {
   )
 }
 
-// ---------- Capítulo: comité y borradores ----------
+// ---------- Capítulo: gerencia y visto bueno ----------
 
 function CapComite() {
   return (
@@ -248,13 +248,13 @@ function CapComite() {
       <Parrafo>
         Cada empresa la juega <strong className="text-zinc-100">UN solo jugador: el GERENTE 👑</strong> (un alumno
         por empresa, sin grupo). El gerente <strong className="text-zinc-100">ve y decide todo</strong>: reportes,
-        cifras financieras y las decisiones de las 5 áreas; edita y envía la decisión del año.
+        cifras financieras y las decisiones de las 5 áreas; llena su decisión y la envía directo al docente.
       </Parrafo>
       <Tabla
         encabezados={['Rol', 'Responsabilidad']}
         filas={[
-          ['👑 GERENTE', 'Único jugador de la empresa: guarda los borradores de las 5 áreas, envía la decisión del año al docente y registra proyectos de I+D.'],
-          ['🧑‍🏫 Docente', 'Crea la simulación con 1 gerente por empresa, revisa las decisiones y da el visto bueno.'],
+          ['👑 GERENTE', 'Único jugador de la empresa: decide las 5 áreas, envía la decisión del año al docente en un solo envío y registra proyectos de I+D.'],
+          ['🧑‍🏫 Docente', 'Crea la simulación con 1 gerente por empresa, revisa el contenido enviado de cada decisión y da el visto bueno.'],
         ]}
       />
 
@@ -266,9 +266,8 @@ function CapComite() {
             edita directamente (es el único jugador de la empresa).
           </>,
           <>
-            El botón <Chip color="emerald">Guardar borrador del área</Chip> (GERENTE) publica esa área en
-            la pestaña <strong className="text-zinc-100">Grupo</strong>, donde se revisa lo decidido por
-            área en números (precios, presupuestos, producción, vendedores, estudios).
+            <strong className="text-zinc-100">Sin borradores ni puntajes</strong>: no hay que “guardar área por
+            área” ni marcar áreas trabajadas. Llenas lo que quieres y envías todo de una vez.
           </>,
           <>
             Las pestañas de <strong className="text-zinc-100">Estudios</strong> e <strong>I+D</strong> son de
@@ -276,23 +275,26 @@ function CapComite() {
             marca nueva desde el área de Investigación y Desarrollo.
           </>,
           <>
-            Si un área <strong className="text-zinc-100">no se trabajó</strong>, el grupo la verá marcada
-            <Chip color="pink">sin trabajar</Chip> con los valores predeterminados (los vigentes de tus marcas).
+            El botón <Chip color="emerald">Enviar decisión del año</Chip> manda <strong className="text-zinc-100">TODO</strong>{' '}
+            en un solo envío: precios, publicidad, producción, fuerza de ventas, marcas nuevas, estudios e
+            inversión en capacidad.
           </>,
           <>
-            Después de revisar los borradores, el GERENTE pulsa{' '}
-            <Chip color="emerald">Enviar decisión del año</Chip>: eso consolida todo y se la manda al docente.
+            El docente recibe la decisión para el <strong className="text-zinc-100">visto bueno</strong> y{' '}
+            <strong className="text-zinc-100">puede ver exactamente lo que enviaste</strong>: cada precio,
+            presupuesto, producción, vendedores, estudios y marcas nuevas.
           </>,
           <>
-            El docente revisa la decisión y da el <strong className="text-zinc-100">visto bueno</strong>;
-            cuando corre la simulación llegan los reportes del año y el ciclo vuelve a empezar.
+            Si aún no tiene el visto bueno, puedes <strong className="text-zinc-100">corregir y reenviar</strong>;
+            cuando el docente aprueba, la decisión queda congelada para el año.
           </>,
         ]}
       />
 
       <Tip>
-        Repartan las áreas al inicio, acuerden plazos internos y revisen el grupo antes del envío final: un año
-        con áreas “sin trabajar” juega con valores viejos y perjudica los resultados de la empresa.
+        Antes de enviar revisa el resumen del envío (aparece al confirmar): la inversión total estimada y los
+        totales de publicidad, producción, fuerza de ventas y estudios. Una vez con el visto bueno, no se puede
+        cambiar hasta el próximo año.
       </Tip>
     </div>
   )
@@ -409,19 +411,24 @@ function CapDecisiones() {
       <Lista
         items={[
           <>
-            <strong className="text-zinc-100">Borrador del área</strong>: cada área envía su borrador al comité
-            (visible para todos). Puede actualizarse cuantas veces quieran antes del envío final.
+            <strong className="text-zinc-100">Envío directo, sin borradores</strong>: llenas las 5 áreas y envías
+            todo con el botón <Chip color="emerald">Enviar decisión del año</Chip> (estado{' '}
+            <Chip color="emerald">enviada</Chip>). No hay áreas “sin trabajar” ni puntos por trabajo.
           </>,
           <>
-            <strong className="text-zinc-100">Enviar decisión del año</strong>: el GERENTE consolida los 5
-            borradores y la manda al docente (estado <Chip color="emerald">enviada</Chip>). Ya no se puede
-            cambiar hasta el próximo año.
+            <strong className="text-zinc-100">Corregir y reenviar</strong>: mientras el docente no dé el visto
+            bueno, puedes cambiar cualquier valor y reenviar (el botón cambia a “Reenviar decisión del año”).
           </>,
           <>
-            Si el comité <strong className="text-zinc-100">no envía</strong> y el docente corre el año, la
-            empresa juega con los valores vigentes y las áreas quedan <Chip color="pink">sin trabajar</Chip>.
+            <strong className="text-zinc-100">Visto bueno = congelada</strong>: cuando el docente aprueba, la
+            decisión no se puede cambiar hasta el próximo año (el docente puede retirar el visto bueno para
+            que la corrijas).
           </>,
-          'El costo de los estudios que marcó el área de I+D se cobra al enviar la decisión del año.',
+          <>
+            Si <strong className="text-zinc-100">no envías</strong> y el docente corre el año, la empresa juega
+            con sus valores vigentes (su decisión no se aplica).
+          </>,
+          'El costo de los estudios elegidos en I+D se cobra al enviar la decisión del año.',
         ]}
       />
     </div>
@@ -597,14 +604,25 @@ function CapReportes() {
         mercado, la participación de cada empresa y la contribución de la suya en cada año histórico. Úsenlo
         para entender el tamaño del mercado y su punto de partida antes de la primera decisión.
       </Parrafo>
+      <Parrafo>
+        La historia es <strong className="text-zinc-100">realista y distinta para cada empresa</strong>: ventas
+        con estacionalidad de helados en Bolivia (pico en verano, valle en invierno), estado de resultados
+        completo (IVA, IT, IUE, logística, promoción, comisiones, márgenes) y ventas repartidas por
+        departamento según su población. No todas las empresas empiezan igual: cada una hereda precios,
+        publicidad, atributos y fuerza de ventas levemente distintas.
+      </Parrafo>
       <Subtitulo>Después de cada ronda</Subtitulo>
       <Tabla
         encabezados={['Reporte', 'Qué contiene']}
         filas={[
           ['Reporte del equipo', 'Ventas, inventario, ingresos, costos, publicidad, fuerza de ventas, contribución y participación del año.'],
+          ['Resultados financieros', 'Estado de resultados con impuestos bolivianos (IVA 13%, IT 3%, IUE 25%), logística, cadena de frío, promoción, utilidad operativa y utilidad neta.'],
+          ['Producción y operación', 'Capacidad instalada y utilizada, merma, quiebres de stock e inversión en capacidad.'],
           ['Por marca', 'El mismo desglose para cada una de tus marcas.'],
           ['Por canal', 'Cómo se repartieron tus ventas entre tiendas, supermercados y kioscos.'],
+          ['Por región', 'Tus ventas en cada departamento (La Paz, Santa Cruz, Cochabamba…).'],
           ['Por segmento', 'Cuánto vendiste a Niños, Adolescentes, Jóvenes, Adultos y Familias.'],
+          ['Mensual', 'Tus ventas mes a mes con la estacionalidad del mercado.'],
           ['Estudios', 'Los datos de cada estudio comprado ese año (awareness, paneles, mapas, pronósticos).'],
         ]}
       />
@@ -724,8 +742,9 @@ function CapConsejos() {
             las ventas. Vender mucho con márgenes mínimos no te hace campeón.
           </>,
           <>
-            <strong className="text-zinc-100">Trabajen el comité</strong>: si un área queda "sin trabajar", la
-            empresa decide con valores viejos. Revisen los borradores antes del envío final.
+            <strong className="text-zinc-100">Envía a tiempo</strong>: si el docente corre el año sin tu
+            decisión (o sin visto bueno), la empresa juega con sus valores viejos. Envía temprano; puedes
+            corregir y reenviar hasta que él lo apruebe.
           </>,
         ]}
       />

@@ -133,8 +133,7 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
   const proyectosActivos = estado.proyectos.filter((p) => p.estado === 'EN_DESARROLLO').length
   const finalizada = industria.estado === 'FINALIZADA'
   const esRepresentante = estado.membresia.esRepresentante
-  const decisionBloqueada = estado.decision?.estado === 'ENVIADA' || estado.decision?.estado === 'APROBADA'
-  const areasSinEnviar = decisionBloqueada ? 0 : estado.cargos.filter((c) => !estado.borradores.some((b) => b.cargo === c.id)).length
+  const decisionEstado = estado.decision?.estado ?? null
   const eventosAnioActual = estado.eventos.filter((e) => e.anio === industria.anioActual)
 
   const tabs = [
@@ -142,7 +141,7 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
       id: 'decisiones',
       nombre: 'Decisiones',
       icono: <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />,
-      badge: esRepresentante && areasSinEnviar > 0 ? areasSinEnviar : undefined,
+      badge: esRepresentante && decisionEstado === null ? 1 : undefined,
     },
     {
       id: 'comite',
@@ -170,7 +169,7 @@ export function AlumnoApp({ usuario, onLogout }: { usuario: UsuarioSesion; onLog
     <div className="pacha-bg flex min-h-screen flex-col text-zinc-100">
       <Hud
         titulo={equipo.nombre}
-        subtitulo={`${industria.nombre} · ${esRepresentante ? '👑 Representante del grupo' : 'Integrante del grupo'}`}
+        subtitulo={`${industria.nombre} · ${esRepresentante ? '👑 GERENTE de la empresa' : 'Integrante'}`}
         anioActual={industria.anioActual}
         anioMaximo={industria.anioMaximo}
         estadoIndustria={industria.estado}

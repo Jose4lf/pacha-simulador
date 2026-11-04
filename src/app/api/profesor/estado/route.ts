@@ -3,7 +3,6 @@ import { requireRol } from '@/lib/pacha/auth'
 import { db } from '@/lib/db'
 import { parseDecision, PachaError } from '@/lib/pacha/tipos'
 import { rankingIndustria } from '@/lib/pacha/simulacion'
-import { CARGOS } from '@/lib/pacha/catalogo'
 
 /** Panel del profesor: sus industrias, comités, decisiones (con contenido) y ranking. */
 export async function GET() {
@@ -33,13 +32,12 @@ export async function GET() {
         nombre: string
         color: string
         numMarcas: number
+        gerente: string | null
         integrantes: { usuarioId: string; nombre: string; representante: boolean }[]
         decisionEstado: string
         decisionId: string | null
         aprobada: boolean
         contenido: ReturnType<typeof parseDecision> | null
-        areasSinBorrador: string[]
-        areasTrabajadas: string[]
       }[]
       ranking: Awaited<ReturnType<typeof rankingIndustria>>
     }[] = []
@@ -49,18 +47,16 @@ export async function GET() {
       const decisiones = await db.decision.findMany({
         where: { equipoId: { in: ind.equipos.map((e) => e.id) }, anio: ind.anioActual },
       })
-      const borradores = await db.borradorArea.findMany({
-        where: { equipoId: { in: ind.equipos.map((e) => e.id) }, anio: ind.anioActual, enviado: true },
-      })
 
       const equipos = ind.equipos.map((e) => {
         const dec = decisiones.find((d) => d.equipoId === e.id)
-        const enviados = new Set(borradores.filter((b) => b.equipoId === e.id).map((b) => b.cargo))
+        const gerente = e.membresias.find((m) => m.representante)?.usuario.nombre ?? null
         return {
           id: e.id,
           nombre: e.nombre,
           color: e.color,
           numMarcas: e.marcas.length,
+          gerente,
           marcas: e.marcas
             .filter((m) => m.activa)
             .sort((a, b) => a.anioLanzamiento - b.anioLanzamiento)
@@ -74,8 +70,6 @@ export async function GET() {
           decisionId: dec?.id ?? null,
           aprobada: dec?.estado === 'APROBADA',
           contenido: dec ? parseDecision(dec.contenido) : null,
-          areasSinBorrador: CARGOS.filter((c) => !enviados.has(c.id)).map((c) => c.id),
-          areasTrabajadas: CARGOS.filter((c) => enviados.has(c.id)).map((c) => c.id),
         }
       })
       resultado.push({

@@ -54,18 +54,8 @@ export async function POST(req: Request) {
         )
       }
 
-      // Sanciones que este usuario registró: las auditorías se conservan, así que
-      // si registró alguna no se puede borrar sin perder el registro.
-      const registradas = await db.penalizacion.count({ where: { registradaPorId: objetivo.id } })
-      if (registradas > 0) {
-        throw new PachaError(
-          'Este usuario registró sanciones en el historial del comité; no se puede eliminar sin perder esa auditoría.'
-        )
-      }
-
-      // Borradores enviados: queda el contenido, sin autor
-      await db.borradorArea.updateMany({ where: { enviadoPorId: objetivo.id }, data: { enviadoPorId: null } })
-      await db.penalizacion.deleteMany({ where: { usuarioId: objetivo.id } })
+      // La membresía se borra en cascada con el usuario; los datos de la
+      // empresa (marcas, decisiones, reportes) quedan intactos.
       await db.membresia.deleteMany({ where: { usuarioId: objetivo.id } })
       await db.usuario.delete({ where: { id: objetivo.id } })
       return ok({ ok: true, nombre: objetivo.nombre })

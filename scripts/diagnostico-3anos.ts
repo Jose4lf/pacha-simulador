@@ -8,7 +8,7 @@
 import { db } from '@/lib/db'
 import { hashPassword } from '@/lib/pacha/auth'
 import {
-  crearIndustria, guardarBorradorArea, enviarDecision, aprobarDecision,
+  crearIndustria, enviarDecision, aprobarDecision,
   procesarRonda, rankingIndustria, eliminarIndustria,
 } from '@/lib/pacha/simulacion'
 
@@ -35,50 +35,46 @@ async function main() {
     const memb = await db.membresia.findFirstOrThrow({ where: { equipoId: eq.id } })
     const marcas = await db.marca.findMany({ where: { equipoId: eq.id, activa: true }, orderBy: { anioLanzamiento: 'asc' } })
 
+    // Envío DIRECTO: toda la decisión del año en una sola llamada (sin borradores)
     if (nombreEquipo === 'Buena') {
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'precios', {
-        precios: marcas.map((m, i) => ({ marcaId: m.id, precio: i === 0 ? 20 : 30 })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'publicidad', {
-        publicidades: marcas.map((m) => ({ marcaId: m.id, publicidad: 700 + anio * 100 })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'produccion', {
-        producciones: marcas.map((m) => ({ marcaId: m.id, produccion: 900 + anio * 250 })),
+      await enviarDecision(eq.id, memb.usuarioId, {
+        marcas: marcas.map((m, i) => ({
+          marcaId: m.id,
+          precio: i === 0 ? 20 : 30,
+          publicidad: 700 + anio * 100,
+          produccion: 900 + anio * 250,
+          vendedores: [120, 26, 18],
+        })),
+        nuevas: [],
+        estudios: [],
         inversionCapacidad: 600,
       })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'ventas', {
-        ventas: marcas.map((m) => ({ marcaId: m.id, vendedores: [120, 26, 18] })),
-      })
     } else if (nombreEquipo === 'Mala') {
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'precios', {
-        precios: marcas.map((m, i) => ({ marcaId: m.id, precio: i === 0 ? 55 : 65 })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'publicidad', {
-        publicidades: marcas.map((m) => ({ marcaId: m.id, publicidad: 0 })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'produccion', {
-        producciones: marcas.map((m) => ({ marcaId: m.id, produccion: 100 })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'ventas', {
-        ventas: marcas.map((m) => ({ marcaId: m.id, vendedores: [0, 0, 0] })),
+      await enviarDecision(eq.id, memb.usuarioId, {
+        marcas: marcas.map((m, i) => ({
+          marcaId: m.id,
+          precio: i === 0 ? 55 : 65,
+          publicidad: 0,
+          produccion: 100,
+          vendedores: [0, 0, 0],
+        })),
+        nuevas: [],
+        estudios: [],
       })
     } else {
-      // Normal: envía los valores vigentes sin cambios (área por área)
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'precios', {
-        precios: marcas.map((m) => ({ marcaId: m.id, precio: m.precio })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'publicidad', {
-        publicidades: marcas.map((m) => ({ marcaId: m.id, publicidad: m.publicidad })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'produccion', {
-        producciones: marcas.map((m) => ({ marcaId: m.id, produccion: m.produccion })),
-      })
-      await guardarBorradorArea(eq.id, memb.usuarioId, 'ventas', {
-        ventas: marcas.map((m) => ({ marcaId: m.id, vendedores: JSON.parse(m.vendedores) as number[] })),
+      // Normal: envía los valores vigentes sin cambios
+      await enviarDecision(eq.id, memb.usuarioId, {
+        marcas: marcas.map((m) => ({
+          marcaId: m.id,
+          precio: m.precio,
+          publicidad: m.publicidad,
+          produccion: m.produccion,
+          vendedores: JSON.parse(m.vendedores) as number[],
+        })),
+        nuevas: [],
+        estudios: [],
       })
     }
-    await guardarBorradorArea(eq.id, memb.usuarioId, 'investigacion', { nuevas: [], estudios: [] })
-    await enviarDecision(eq.id, memb.usuarioId)
     const dec = await db.decision.findUniqueOrThrow({ where: { equipoId_anio: { equipoId: eq.id, anio } } })
     await aprobarDecision(dec.id, profe.id, true)
   }

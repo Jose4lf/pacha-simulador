@@ -178,42 +178,42 @@ export interface Cargo {
 }
 
 /**
- * Los 5 cargos del Comité de Dirección de Marketing de cada empresa.
- * Cada cargo ES responsable de un área de la decisión anual, pero cualquier
- * integrante puede consultar, debatir y colaborar en todas las áreas.
+ * Las 5 áreas de la decisión anual del GERENTE de cada empresa.
+ * El gerente (único jugador) decide todas las áreas en un solo envío;
+ * estas entradas organizan la pantalla de decisiones y los reportes.
  */
 export const CARGOS: Cargo[] = [
   {
     id: 'precios',
-    nombre: 'Gerente de Precios y Producto',
+    nombre: 'Precios y producto',
     corto: 'Precios',
     emoji: '💰',
     descripcion: 'Fija el precio Bs/unidad de cada marca y vigila el costo unitario.',
   },
   {
     id: 'publicidad',
-    nombre: 'Gerente de Publicidad y Promoción',
+    nombre: 'Publicidad y promoción',
     corto: 'Publicidad',
     emoji: '📺',
     descripcion: 'Define el presupuesto publicitario anual de cada marca.',
   },
   {
     id: 'produccion',
-    nombre: 'Gerente de Producción',
+    nombre: 'Producción',
     corto: 'Producción',
     emoji: '🏭',
     descripcion: 'Planifica la producción en miles de unidades para no quedar en quiebre de stock.',
   },
   {
     id: 'ventas',
-    nombre: 'Gerente de Distribución y Ventas',
+    nombre: 'Distribución y ventas',
     corto: 'Distribución',
     emoji: '🚚',
     descripcion: 'Reparte la fuerza de ventas entre tiendas, supermercados y kioscos.',
   },
   {
     id: 'investigacion',
-    nombre: 'Gerente de Investigación y Desarrollo',
+    nombre: 'Investigación y desarrollo',
     corto: 'I+D',
     emoji: '🔬',
     descripcion: 'Compra estudios de mercado, coordina el I+D y lanza las marcas nuevas.',
@@ -224,11 +224,6 @@ export const CARGO_IDS = CARGOS.map((c) => c.id)
 
 export function esCargoValido(cargo: string): boolean {
   return CARGO_IDS.includes(cargo)
-}
-
-/** Puntos con los que arranca cada membresía (el puntaje de desempeño fue retirado del juego). */
-export const DESEMPENO = {
-  puntosIniciales: 0,
 }
 
 // ===================== I+D =====================

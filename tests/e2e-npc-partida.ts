@@ -144,9 +144,7 @@ async function main() {
   await pedir('POST', '/api/decano/usuarios', tokenAdmin, { accion: 'crear', nombre: sinEmpresa, password: CLAVE, rol: 'ALUMNO' })
   let rechazoLibre = ''
   try {
-    await pedir('POST', '/api/alumno/decisiones', await login(sinEmpresa), {
-      accion: 'borrador-area', cargo: 'precios', contenido: { precios: [] },
-    })
+    await pedir('POST', '/api/alumno/decisiones', await login(sinEmpresa), { contenido: { marcas: [] } })
   } catch (e) { rechazoLibre = (e as Error).message }
   assert(rechazoLibre !== '', `alumno sin empresa rechazado (mensaje: ${rechazoLibre.slice(0, 70)})`)
   linea('🧑‍🎓', 'Modo un jugador', `Un alumno sin empresa NO puede decidir → «${rechazoLibre.slice(0, 60)}».`)
@@ -181,24 +179,6 @@ async function main() {
       assert(marcaIds.length >= 2, `${nombreEquipo}: el GERENTE ve sus marcas`)
       assert(primeros.membresia?.esRepresentante === true, `${nombreEquipo}: el estado marca al alumno como GERENTE (único jugador)`)
 
-      // Borradores de TODAS las áreas (los guarda el GERENTE)
-      const variacion = 1 + (anio - 1) * 0.1
-      await pedir('POST', '/api/alumno/decisiones', tkRep, {
-        accion: 'borrador-area', cargo: 'precios',
-        contenido: { precios: marcaIds.map((id, i) => ({ marcaId: id, precio: (i === 0 ? 12.5 : 15.5) * variacion })) },
-      })
-      await pedir('POST', '/api/alumno/decisiones', tkRep, {
-        accion: 'borrador-area', cargo: 'publicidad',
-        contenido: { publicidades: marcaIds.map((id) => ({ marcaId: id, publicidad: 250 + anio * 50 })) },
-      })
-      await pedir('POST', '/api/alumno/decisiones', tkRep, {
-        accion: 'borrador-area', cargo: 'produccion',
-        contenido: { producciones: marcaIds.map((id) => ({ marcaId: id, produccion: 850 + anio * 60 })), inversionCapacidad: anio === 3 ? 500 : 0 },
-      })
-      await pedir('POST', '/api/alumno/decisiones', tkRep, {
-        accion: 'borrador-area', cargo: 'ventas',
-        contenido: { ventas: marcaIds.map((id) => ({ marcaId: id, vendedores: [12 + anio, 6, 4] })) },
-      })
       if (anio === 1 && !proyectoRegistrado) {
         await pedir('POST', '/api/alumno/proyectos', tkRep, {
           nombre: `Helado keto andino ${SUF}`, atributos: [7, 8, 5, 6, 7, 9], presupuesto: 300,
@@ -206,23 +186,41 @@ async function main() {
         proyectoRegistrado = true
         linea('🧑‍🎓', `${nombreEquipo} · I+D`, 'Proyecto I+D registrado por el GERENTE: «Helado keto andino» (presupuesto 300 miles Bs).')
       }
-      await pedir('POST', '/api/alumno/decisiones', tkRep, {
-        accion: 'borrador-area', cargo: 'investigacion',
-        contenido: { nuevas: [], estudios: anio === 1 ? [10] : [1] },
+
+      // ENVÍO DIRECTO: toda la decisión del año en UNA sola llamada (sin borradores)
+      const variacion = 1 + (anio - 1) * 0.1
+      const envio = await pedir<{ ok: boolean; estudiosComprados: number }>('POST', '/api/alumno/decisiones', tkRep, {
+        contenido: {
+          marcas: marcaIds.map((id, i) => ({
+            marcaId: id,
+            precio: (i === 0 ? 12.5 : 15.5) * variacion,
+            publicidad: 250 + anio * 50,
+            produccion: 850 + anio * 60,
+            vendedores: [12 + anio, 6, 4],
+          })),
+          nuevas: [],
+          estudios: anio === 1 ? [10] : [1],
+          ...(anio === 3 ? { inversionCapacidad: 500 } : {}),
+        },
       })
-      linea('🧑‍🎓', nombreEquipo, 'El GERENTE guardó los 5 borradores de área (precio, publicidad, producción, ventas, I+D).')
+      linea('🧑‍🎓', nombreEquipo, `Decisión del año enviada DIRECTA por el GERENTE (1 llamada, todo el contenido; estudios: ${envio.estudiosComprados}).`)
 
-      // Envío de la decisión consolidada (solo el GERENTE puede)
-      const envio = await pedir<{ areasSinTrabajar: string[]; estudiosComprados: number }>('POST', '/api/alumno/decisiones', tkRep, { accion: 'enviar' })
-      assert(envio.areasSinTrabajar.length === 0, `${nombreEquipo}: las 5 áreas trabajadas`)
-      linea('🧑‍🎓', nombreEquipo, `Decisión del año enviada por el GERENTE al docente (áreas sin trabajar: 0, estudios: ${envio.estudiosComprados}).`)
-
-      // Doble envío debe ser rechazado
-      let doble = ''
-      try {
-        await pedir('POST', '/api/alumno/decisiones', tkRep, { accion: 'enviar' })
-      } catch (e) { doble = (e as Error).message }
-      assert(doble.includes('ya fue enviada'), `${nombreEquipo}: doble envío rechazado`)
+      // El reenvío (corrección) está permitido mientras esté ENVIADA sin visto bueno
+      const reenvio = await pedir<{ ok: boolean }>('POST', '/api/alumno/decisiones', tkRep, {
+        contenido: {
+          marcas: marcaIds.map((id, i) => ({
+            marcaId: id,
+            precio: (i === 0 ? 12.5 : 15.5) * variacion,
+            publicidad: 250 + anio * 50,
+            produccion: 850 + anio * 60,
+            vendedores: [12 + anio, 6, 4],
+          })),
+          nuevas: [],
+          estudios: anio === 1 ? [10] : [1],
+        },
+      })
+      assert(reenvio.ok, `${nombreEquipo}: reenvío permitido antes del visto bueno`)
+      linea('🧑‍🎓', nombreEquipo, 'Corrección y REENVÍO verificados (sin visto bueno la decisión es editable).')
     }
 
     // Docente aprueba y ejecuta
@@ -234,6 +232,18 @@ async function main() {
       assert((r as any).estado === 'APROBADA', `${eq.nombre}: visto bueno concedido`)
     }
     linea('🎓', 'Docente', 'Visto bueno otorgado a las 2 empresas.')
+
+    // Con el visto bueno la decisión queda CONGELADA: reenvío rechazado (año 1)
+    if (anio === 1) {
+      const primera = mia.equipos[0]
+      const tkPrimera = await tokenDe(primera.integrantes.find((g: any) => g.representante)!.nombre)
+      let errorCongelada = ''
+      try {
+        await pedir('POST', '/api/alumno/decisiones', tkPrimera, { contenido: { marcas: [] } })
+      } catch (e) { errorCongelada = (e as Error).message }
+      assert(errorCongelada.includes('visto bueno'), `decisión con visto bueno CONGELADA (mensaje: ${errorCongelada.slice(0, 70)})`)
+      linea('🔒', 'Regla nueva', `Reenvío tras el visto bueno RECHAZADO (${primera.nombre}): la decisión del año está congelada.`)
+    }
 
     const ronda = await pedir<{ anioProcesado: number; ventasTotales: number; finalizada: boolean }>('POST', '/api/profesor/procesar', tokenProfe, { industriaId: industria.id })
     assert(ronda.anioProcesado === anio, `ronda procesada = año ${anio}`)

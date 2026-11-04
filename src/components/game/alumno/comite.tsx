@@ -1,72 +1,63 @@
 'use client'
 
-import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { FlaskConical } from 'lucide-react'
-import { type AlumnoEstado, type BorradorAreaFront, type CargoFront } from '@/lib/pacha/api-client'
+import { type AlumnoEstado, type DecisionContenidoPayload } from '@/lib/pacha/api-client'
 import { CANALES } from '@/lib/pacha/catalogo'
 import { Badge } from '@/components/ui/badge'
 
 const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
 const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 
-/* ============ Líneas contables de cada área (contenido del borrador) ============ */
+/* ============ Resumen contable de la decisión del año ============ */
 
-function LineasArea({ estado, borrador }: { estado: AlumnoEstado; borrador: BorradorAreaFront }) {
-  const nombreMarca = useMemo(() => new Map(estado.marcas.map((m) => [m.id, m.nombre])), [estado.marcas])
-  const c = borrador.contenido as Record<string, unknown>
+function LineasDecision({
+  estado,
+  contenido,
+}: {
+  estado: AlumnoEstado
+  contenido: DecisionContenidoPayload | null
+}) {
+  const nombreMarca = new Map(estado.marcas.map((m) => [m.id, m.nombre]))
   const filas: { etiqueta: string; valor: string }[] = []
 
-  if (borrador.cargo === 'precios' && Array.isArray(c.precios)) {
-    for (const p of c.precios as { marcaId: string; precio: number }[]) {
-      filas.push({ etiqueta: `🍨 ${nombreMarca.get(p.marcaId) ?? 'Marca'}`, valor: `Bs ${Number(p.precio).toFixed(2)} / unidad` })
-    }
-  } else if (borrador.cargo === 'publicidad' && Array.isArray(c.publicidades)) {
-    let total = 0
-    for (const p of c.publicidades as { marcaId: string; publicidad: number }[]) {
-      total += Number(p.publicidad)
-      filas.push({ etiqueta: `🍨 ${nombreMarca.get(p.marcaId) ?? 'Marca'}`, valor: fmtBs(Number(p.publicidad)) })
-    }
-    filas.push({ etiqueta: 'Σ Total publicidad', valor: fmtBs(total) })
-  } else if (borrador.cargo === 'produccion' && Array.isArray(c.producciones)) {
-    let total = 0
-    for (const p of c.producciones as { marcaId: string; produccion: number }[]) {
-      total += Number(p.produccion)
-      filas.push({ etiqueta: `🍨 ${nombreMarca.get(p.marcaId) ?? 'Marca'}`, valor: fmtU(Number(p.produccion)) })
-    }
-    filas.push({ etiqueta: 'Σ Producción total', valor: fmtU(total) })
-    if (Number(c.inversionCapacidad) > 0) {
-      filas.push({ etiqueta: '🏗️ Inversión en capacidad', valor: `${Number(c.inversionCapacidad).toLocaleString('es-BO')} mil L` })
-    }
-  } else if (borrador.cargo === 'ventas' && Array.isArray(c.ventas)) {
-    let fuerza = 0
-    for (const v of c.ventas as { marcaId: string; vendedores: number[] }[]) {
-      const vs = v.vendedores ?? [0, 0, 0]
-      const sueldos = CANALES.reduce((s, cn, i) => s + (vs[i] ?? 0) * cn.salario, 0)
-      fuerza += sueldos
-      filas.push({
-        etiqueta: `🍨 ${nombreMarca.get(v.marcaId) ?? 'Marca'}`,
-        valor: `${vs[0] ?? 0} T · ${vs[1] ?? 0} S · ${vs[2] ?? 0} K (vendedores)`,
-      })
-    }
-    filas.push({ etiqueta: 'Σ Nómina de ventas', valor: fmtBs(fuerza) })
-  } else if (borrador.cargo === 'investigacion') {
-    const estudios = Array.isArray(c.estudios) ? (c.estudios as number[]) : []
+  // Precios, publicidad, producción y ventas de cada marca (decisión enviada o valores vigentes)
+  for (const m of estado.marcas) {
+    const d = contenido?.marcas.find((x) => x.marcaId === m.id)
+    filas.push({ etiqueta: `🍨 ${m.nombre} · precio`, valor: `Bs ${Number(d?.precio ?? m.precio).toFixed(2)} / unidad` })
+    filas.push({ etiqueta: `🍨 ${m.nombre} · publicidad`, valor: fmtBs(Number(d?.publicidad ?? m.publicidad)) })
+    filas.push({ etiqueta: `🍨 ${m.nombre} · producción`, valor: fmtU(Number(d?.produccion ?? m.produccion)) })
+    const vs = d?.vendedores ?? m.vendedores
+    const fuerza = CANALES.reduce((s, c, i) => s + (vs[i] ?? 0) * c.salario, 0)
+    filas.push({
+      etiqueta: `🍨 ${m.nombre} · vendedores`,
+      valor: `${vs[0] ?? 0} T · ${vs[1] ?? 0} S · ${vs[2] ?? 0} K (${fmtBs(fuerza)})`,
+    })
+  }
+
+  if (Number(contenido?.inversionCapacidad) > 0) {
+    filas.push({
+      etiqueta: '🏗️ Inversión en capacidad',
+      valor: `${Number(contenido?.inversionCapacidad).toLocaleString('es-BO')} mil L`,
+    })
+  }
+
+  const estudios = Array.isArray(contenido?.estudios) ? contenido.estudios : []
+  if (estudios.length > 0) {
     let costoEstudios = 0
     for (const id of estudios) {
       const est = estado.config.catalogoEstudios.find((e) => e.id === id)
       costoEstudios += est?.costo ?? 0
       filas.push({ etiqueta: `${est?.icono ?? '📄'} ${est?.nombre ?? `Estudio #${id}`}`, valor: fmtBs(est?.costo ?? 0) })
     }
-    if (estudios.length === 0) filas.push({ etiqueta: '📄 Estudios de mercado', valor: 'ninguno seleccionado' })
-    if (estudios.length > 0) filas.push({ etiqueta: 'Σ Costo de estudios', valor: fmtBs(costoEstudios) })
-    const nuevas = Array.isArray(c.nuevas) ? (c.nuevas as { nombre: string; precio: number; publicidad: number; produccion: number; vendedores: number[] }[]) : []
-    for (const n of nuevas) {
-      filas.push({
-        etiqueta: `🌟 Lanzar «${n.nombre || 'marca nueva'}»`,
-        valor: `Bs ${Number(n.precio).toFixed(2)}/u · ${fmtBs(Number(n.publicidad))} · ${fmtU(Number(n.produccion))} · ${n.vendedores?.[0] ?? 0}T/${n.vendedores?.[1] ?? 0}S/${n.vendedores?.[2] ?? 0}K`,
-      })
-    }
+    filas.push({ etiqueta: 'Σ Costo de estudios', valor: fmtBs(costoEstudios) })
+  }
+
+  for (const n of contenido?.nuevas ?? []) {
+    filas.push({
+      etiqueta: `🌟 Lanzar «${n.nombre || 'marca nueva'}»`,
+      valor: `Bs ${Number(n.precio).toFixed(2)}/u · ${fmtBs(Number(n.publicidad))} · ${fmtU(Number(n.produccion))} · ${n.vendedores?.[0] ?? 0}T/${n.vendedores?.[1] ?? 0}S/${n.vendedores?.[2] ?? 0}K`,
+    })
   }
 
   return (
@@ -84,10 +75,6 @@ function LineasArea({ estado, borrador }: { estado: AlumnoEstado; borrador: Borr
 export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () => Promise<void> | void }) {
   const anio = estado.industria.anioActual
   const decisionEstado = estado.decision?.estado ?? null
-  const bloqueada = decisionEstado === 'ENVIADA' || decisionEstado === 'APROBADA'
-
-  const cargos: CargoFront[] = estado.cargos
-  const borradorDe = new Map(estado.borradores.map((b) => [b.cargo, b]))
 
   return (
     <div className="space-y-5 pb-4">
@@ -96,15 +83,15 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
           👑 <span className="pacha-title-shine">Gerencia</span> de la empresa
         </h2>
         <p className="mt-0.5 text-sm text-zinc-400">
-          Cada empresa la juega <b>UN solo jugador: el GERENTE 👑</b>. Decide las 5 áreas, toma y envía las
-          decisiones del año y consulta todos los reportes y datos financieros.
+          Cada empresa la juega <b>UN solo jugador: el GERENTE 👑</b>. Decide las 5 áreas, envía la decisión del año
+          en un solo envío (sin borradores) y consulta todos los reportes y datos financieros.
         </p>
       </div>
 
       {/* Estado de la decisión del año */}
       {decisionEstado === 'ENVIADA' && (
         <div role="status" className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-200">
-          🔒 El GERENTE ya envió la decisión del Año {anio} — esperando el visto bueno del docente.
+          📨 La decisión del Año {anio} ya fue enviada — esperando el visto bueno del docente (se puede corregir y reenviar).
         </div>
       )}
       {decisionEstado === 'APROBADA' && (
@@ -113,7 +100,7 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
         </div>
       )}
 
-      {/* Integrantes del grupo */}
+      {/* Integrantes de la empresa */}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {estado.comite.map((g, i) => {
           const esYo = g.usuarioId === estado.usuario.id
@@ -143,7 +130,7 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
 
               {g.representante && (
                 <p className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-200">
-                  Único jugador de la empresa: decide las 5 áreas, guarda los borradores y envía la decisión del año al docente.
+                  Único jugador de la empresa: decide las 5 áreas y envía la decisión del año al docente en un solo envío directo.
                 </p>
               )}
             </motion.article>
@@ -151,46 +138,31 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
         })}
       </div>
 
-      {/* Lo que decidió cada área, en números (comité) */}
+      {/* La decisión del año, en números (enviada o valores vigentes) */}
       <div className="pacha-panel p-4">
         <h3 className="mb-1 text-sm font-black uppercase tracking-wide text-zinc-300">
-          🧾 Lo que decidió cada área · Año {anio} (en números)
+          🧾 La decisión del Año {anio} (en números)
         </h3>
         <p className="mb-3 text-[11px] text-zinc-500">
-          Resumen contable de los borradores guardados en cada área de la decisión. Todos los integrantes pueden
-          consultarlos; solo el representante los edita y envía.
+          {decisionEstado
+            ? 'Contenido que el GERENTE envió al docente. Todos los integrantes de la empresa pueden consultarlo.'
+            : 'Aún no se envía la decisión: estos son los valores vigentes de las marcas.'}
         </p>
-        <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
-          {cargos.map((c) => {
-            const b = borradorDe.get(c.id)
-            return (
-              <div key={c.id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-black text-zinc-100">
-                    <span aria-hidden="true">{c.emoji}</span> {c.nombre}
-                  </p>
-                  {b && <span className="text-[10px] font-bold text-zinc-400">por {b.enviadoPor}</span>}
-                </div>
-                {b ? (
-                  <LineasArea estado={estado} borrador={b} />
-                ) : (
-                  <p className="mt-2 text-[11px] italic text-zinc-500">
-                    {bloqueada ? 'Sin borrador: se usaron valores predeterminados.' : 'Área sin trabajar todavía.'}
-                  </p>
-                )}
-              </div>
-            )
-          })}
+        <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+          <p className="text-xs font-black text-zinc-100">
+            <span aria-hidden="true">🎯</span> Decisión del Año {anio}
+          </p>
+          <LineasDecision estado={estado} contenido={estado.decision?.contenido ?? null} />
         </div>
       </div>
 
-      {/* Proyectos I+D del equipo: los revisa todo el comité */}
+      {/* Proyectos I+D de la empresa */}
       <div className="pacha-panel p-4">
         <h3 className="mb-1 flex items-center gap-2 text-sm font-black uppercase tracking-wide text-zinc-300">
-          <FlaskConical className="h-4 w-4 text-purple-300" aria-hidden="true" /> Proyectos de I+D del equipo
+          <FlaskConical className="h-4 w-4 text-purple-300" aria-hidden="true" /> Proyectos de I+D de la empresa
         </h3>
         <p className="mb-3 text-[11px] text-zinc-500">
-          Registrados por el GERENTE de la empresa. Cuando uno se aprueba, se puede lanzar la marca nueva
+          Registrados por el GERENTE. Cuando uno se aprueba, se puede lanzar la marca nueva
           desde el área de Investigación y Desarrollo.
         </p>
         {estado.proyectos.length === 0 ? (
