@@ -30,8 +30,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
-const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + 'k'
-const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + 'k u'
+const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' mil'
+const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
 
 /* ============ Líneas contables de cada área (contenido del borrador) ============ */
