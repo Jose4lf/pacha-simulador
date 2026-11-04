@@ -5,7 +5,7 @@ import { definirRepresentante } from '@/lib/pacha/simulacion'
 import { PachaError } from '@/lib/pacha/tipos'
 
 /**
- * El docente designa (o cambia) al REPRESENTANTE de una empresa.
+ * El docente designa (o cambia) al GERENTE de una empresa (1 jugador por empresa).
  * POST { equipoId, usuarioId }
  */
 export async function POST(req: Request) {

@@ -219,7 +219,7 @@ function AreaCard({
   cargo,
   enviadoPor,
   bloqueada,
-  /** Modo consulta: solo el REPRESENTANTE edita; el resto del grupo ve los datos. */
+  /** Modo consulta: solo el GERENTE edita; (la empresa juega con un solo jugador). */
   modoConsulta,
   children,
   onEnviar,
@@ -307,7 +307,7 @@ export function AlumnoDecisiones({
   const bloqueada = decisionEstado === 'ENVIADA' || decisionEstado === 'APROBADA'
 
   // Nuevo modelo: todos los integrantes VEN todas las áreas y todos los datos;
-  // SOLO el REPRESENTANTE edita y envía las decisiones.
+  // SOLO el GERENTE edita y envía las decisiones (un jugador por empresa).
   const esRepresentante = estado.membresia?.esRepresentante ?? false
   const modoConsulta = !esRepresentante && !bloqueada
 
@@ -865,15 +865,14 @@ export function AlumnoDecisiones({
         </h2>
         {esRepresentante ? (
           <p className="mt-0.5 text-sm text-zinc-400">
-            👑 Eres el <b className="text-amber-300">REPRESENTANTE</b> del grupo: define las 5 áreas con tus
-            compañeros, guarda cada borrador y envía la decisión del año al docente. Todos los integrantes pueden
-            ver y analizar estos números.
+            👑 Eres el <b className="text-amber-300">GERENTE</b> de la empresa (el único jugador): decide las 5 áreas,
+            guarda cada borrador y envía la decisión del año al docente.
           </p>
         ) : (
           <p className="mt-0.5 text-sm text-zinc-400">
-            👁️ Todo el grupo puede <b>consultar</b> estas decisiones y analizar los números, pero solo el
-            <b className="text-amber-300"> REPRESENTANTE</b>{' '}
-            {estado.comite.find((g) => g.representante)?.nombre ?? 'del grupo'} puede editarlas y enviarlas.
+            👁️ Modo consulta: solo el
+            <b className="text-amber-300"> GERENTE</b>{' '}
+            {estado.comite.find((g) => g.representante)?.nombre ?? 'de la empresa'} puede editarlas y enviarlas.
           </p>
         )}
       </div>
@@ -897,7 +896,7 @@ export function AlumnoDecisiones({
             )}
             {!esRepresentante ? (
               <span className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-3 py-2 text-[11px] font-bold text-sky-300">
-                👁️ Modo consulta: el representante envía la decisión del año
+                👁️ Modo consulta: el GERENTE envía la decisión del año
               </span>
             ) : (
             <AlertDialog>

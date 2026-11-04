@@ -93,19 +93,18 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
     <div className="space-y-5 pb-4">
       <div>
         <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">
-          👥 Grupo <span className="pacha-title-shine">de Dirección</span>
+          👑 <span className="pacha-title-shine">Gerencia</span> de la empresa
         </h2>
         <p className="mt-0.5 text-sm text-zinc-400">
-          Los integrantes de la empresa (máximo 8). Todos pueden consultar los reportes, los datos financieros y lo
-          decidido en cada área; solo el <b className="text-amber-300">👑 REPRESENTANTE</b> toma y envía las
-          decisiones del año.
+          Cada empresa la juega <b>UN solo jugador: el GERENTE 👑</b>. Decide las 5 áreas, toma y envía las
+          decisiones del año y consulta todos los reportes y datos financieros.
         </p>
       </div>
 
       {/* Estado de la decisión del año */}
       {decisionEstado === 'ENVIADA' && (
         <div role="status" className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-3 text-sm font-bold text-amber-200">
-          🔒 El comité ya envió la decisión del Año {anio} — esperando el visto bueno del docente.
+          🔒 El GERENTE ya envió la decisión del Año {anio} — esperando el visto bueno del docente.
         </div>
       )}
       {decisionEstado === 'APROBADA' && (
@@ -134,7 +133,7 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
                   </h3>
                   <p className="text-[11px] font-semibold text-zinc-400">
                     {g.representante ? (
-                      <span className="font-bold text-amber-300">Representante del grupo · toma las decisiones</span>
+                      <span className="font-bold text-amber-300">GERENTE de la empresa · toma todas las decisiones</span>
                     ) : (
                       'Integrante · consulta todos los reportes y datos'
                     )}
@@ -144,7 +143,7 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
 
               {g.representante && (
                 <p className="mt-2 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1.5 text-[11px] leading-snug text-amber-200">
-                  Responsable de guardar los borradores de las 5 áreas y de enviar la decisión del año al docente.
+                  Único jugador de la empresa: decide las 5 áreas, guarda los borradores y envía la decisión del año al docente.
                 </p>
               )}
             </motion.article>
@@ -191,7 +190,7 @@ export function AlumnoComite({ estado }: { estado: AlumnoEstado; refresh?: () =>
           <FlaskConical className="h-4 w-4 text-purple-300" aria-hidden="true" /> Proyectos de I+D del equipo
         </h3>
         <p className="mb-3 text-[11px] text-zinc-500">
-          Registrados por el REPRESENTANTE del grupo. Cuando uno se aprueba, el grupo puede lanzar la marca nueva
+          Registrados por el GERENTE de la empresa. Cuando uno se aprueba, se puede lanzar la marca nueva
           desde el área de Investigación y Desarrollo.
         </p>
         {estado.proyectos.length === 0 ? (

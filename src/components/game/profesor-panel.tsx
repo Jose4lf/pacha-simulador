@@ -34,8 +34,8 @@ const fmtBs = (v: number) => 'Bs ' + Math.round(v).toLocaleString('es-BO') + ' m
 const fmtU = (v: number) => v.toLocaleString('es-BO', { maximumFractionDigits: 1 }) + ' mil u'
 const msg = (e: unknown) => (e instanceof Error ? e.message : 'Ocurrió un error inesperado')
 
-/** Máximo de integrantes por empresa (igual que el backend). */
-const MAX_INTEGRANTES = 8
+/** Cada empresa la juega UN solo jugador: el GERENTE (igual que el backend). */
+const GERENTES_POR_EMPRESA = 1
 
 /** Nombres cortos de los cargos (igual que el catálogo del backend). */
 const CARGO_CORTO: Record<string, string> = {
@@ -98,7 +98,7 @@ function DialogoDecision({
           📋 Decisión del Año {anio} · {eq.nombre}
         </DialogTitle>
         <DialogDescription className="text-zinc-400">
-          Consolidado de los borradores de las 5 áreas decididas por el REPRESENTANTE. Las áreas sin borrador usaron valores
+          Consolidado de los borradores de las 5 áreas decididas por el GERENTE. Las áreas sin borrador usaron valores
           predeterminados y quedaron «sin trabajar».
         </DialogDescription>
       </DialogHeader>
@@ -207,21 +207,17 @@ function TarjetaIndustria({
   procesando,
   aprobandoId,
   eliminando,
-  designandoEquipoId,
   onProcesar,
   onAprobar,
   onEliminar,
-  onDefinirRepresentante,
 }: {
   ind: ProfesorIndustria
   procesando: boolean
   aprobandoId: string | null
   eliminando: boolean
-  designandoEquipoId: string | null
   onProcesar: (ind: ProfesorIndustria) => Promise<void>
   onAprobar: (decisionId: string, aprobada: boolean) => Promise<void>
   onEliminar: (ind: ProfesorIndustria) => Promise<void>
-  onDefinirRepresentante: (equipoId: string, usuarioId: string) => Promise<void>
 }) {
   const [verDecision, setVerDecision] = useState<string | null>(null)
   const sinVistoBueno = ind.equipos.filter((e) => e.decisionEstado !== 'APROBADA')
@@ -243,7 +239,7 @@ function TarjetaIndustria({
             <BadgeEstadoIndustria estado={ind.estado} />
           </div>
           <p className="mt-0.5 text-xs text-zinc-500">
-            {ind.equipos.length} empresa(s) compitiendo · grupos de hasta {MAX_INTEGRANTES} integrantes (con 1 representante)
+            {ind.equipos.length} empresa(s) compitiendo · cada empresa con su GERENTE 👑 (1 jugador, decide todas las áreas)
           </p>
         </div>
         <div className="w-full max-w-[220px]">
@@ -373,7 +369,7 @@ function TarjetaIndustria({
             <TableHeader>
               <TableRow className="border-white/10 hover:bg-transparent">
                 <TableHead className="text-zinc-400">Empresa</TableHead>
-                <TableHead className="text-zinc-400">Integrantes (👑 representante decide)</TableHead>
+                <TableHead className="text-zinc-400">Gerente (👑 el que decide)</TableHead>
                 <TableHead className="text-right text-zinc-400">Marcas</TableHead>
                 <TableHead className="text-zinc-400">Decisión del año</TableHead>
                 <TableHead className="text-right text-zinc-400">Cuota</TableHead>
@@ -393,11 +389,11 @@ function TarjetaIndustria({
                     </TableCell>
                     <TableCell>
                       <div className="flex max-w-[320px] flex-wrap items-center gap-1">
-                        {eq.integrantes.length === 0 && <span className="text-[11px] text-zinc-500">— sin integrantes —</span>}
+                        {eq.integrantes.length === 0 && <span className="text-[11px] text-zinc-500">— sin gerente —</span>}
                         {eq.integrantes.map((g) => (
                           <span
                             key={g.usuarioId}
-                            title={g.representante ? 'REPRESENTANTE del grupo' : 'Integrante del grupo'}
+                            title={g.representante ? 'GERENTE de la empresa (único jugador)' : 'Integrante'}
                             className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
                               g.representante
                                 ? 'border-amber-400/50 bg-amber-400/15 text-amber-100'
@@ -407,29 +403,6 @@ function TarjetaIndustria({
                             {g.representante ? '👑 ' : ''}{g.nombre}
                           </span>
                         ))}
-                        {eq.integrantes.length > 1 && (
-                          <Select
-                            value={eq.integrantes.find((g) => g.representante)?.usuarioId}
-                            onValueChange={(v) => void onDefinirRepresentante(eq.id, v)}
-                            disabled={designandoEquipoId !== null}
-                          >
-                            <SelectTrigger
-                              size="sm"
-                              aria-label={`Cambiar representante de ${eq.nombre}`}
-                              title="Cambiar quién es el REPRESENTANTE del grupo"
-                              className="h-6 w-[132px] border-white/10 bg-black/40 text-[10px] text-zinc-100"
-                            >
-                              <SelectValue placeholder="👑 Cambiar representante" />
-                            </SelectTrigger>
-                            <SelectContent className="border-white/10 bg-[#1c1528] text-zinc-100">
-                              {eq.integrantes.map((g) => (
-                                <SelectItem key={g.usuarioId} value={g.usuarioId}>
-                                  {g.nombre}{g.representante ? ' (actual)' : ''}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-right text-xs font-bold text-zinc-200">{eq.numMarcas}</TableCell>
@@ -660,7 +633,7 @@ function DialogoNuevaSimulacion({
       toast({ title: 'Sin alumnos', description: 'Agrega al menos un estudiante.', variant: 'destructive' })
       return
     }
-    // Auto-reparto inicial: columna empresa del CSV si existe; el resto parejo (5 por empresa)
+    // Auto-reparto inicial: columna empresa del CSV si existe; 1 GERENTE por empresa
     const conteo = new Map<string, number>()
     const resultado = filas.map((f) => {
       if (f.empresa && empresasLista.some((e) => e.toLowerCase() === f.empresa.toLowerCase())) {
@@ -670,11 +643,18 @@ function DialogoNuevaSimulacion({
       }
       return { ...f, empresa: '' }
     })
-    // Repartir los sin empresa hacia la empresa con menos integrantes (tope 8)
+    if (filas.length > empresasLista.length) {
+      toast({
+        title: 'Un solo GERENTE por empresa',
+        description: `${filas.length} estudiantes para ${empresasLista.length} empresa(s): sobran ${filas.length - empresasLista.length}. Cada empresa la juega UN solo alumno.`,
+        variant: 'destructive',
+      })
+    }
+    // Repartir los sin empresa hacia una empresa sin GERENTE
     const sinAsignar = resultado.filter((f) => !f.empresa)
     for (const f of sinAsignar) {
-      const objetivos = [...empresasLista].sort((a, b) => (conteo.get(a) ?? 0) - (conteo.get(b) ?? 0))
-      const objetivo = objetivos.find((e) => (conteo.get(e) ?? 0) < MAX_INTEGRANTES) ?? objetivos[0]
+      const objetivo = empresasLista.find((e) => (conteo.get(e) ?? 0) < GERENTES_POR_EMPRESA)
+      if (!objetivo) break
       f.empresa = objetivo
       conteo.set(objetivo, (conteo.get(objetivo) ?? 0) + 1)
     }
@@ -683,10 +663,10 @@ function DialogoNuevaSimulacion({
 
   function repartirTodo() {
     if (!alumnos) return
-    if (alumnos.length > empresasLista.length * MAX_INTEGRANTES) {
+    if (alumnos.length > empresasLista.length * GERENTES_POR_EMPRESA) {
       toast({
-        title: `No alcanzan las empresas`,
-        description: `${alumnos.length} alumnos superan el tope de ${empresasLista.length} × ${MAX_INTEGRANTES}. Aumenta el nº de empresas.`,
+        title: 'Un solo GERENTE por empresa',
+        description: `${alumnos.length} alumnos superan las ${empresasLista.length} empresa(s) × 1 gerente. Aumenta el nº de empresas o quita alumnos.`,
         variant: 'destructive',
       })
       return
@@ -694,13 +674,13 @@ function DialogoNuevaSimulacion({
     const conteo = new Map<string, number>(empresasLista.map((e) => [e, 0]))
     const copia = alumnos.map((f) => ({ ...f, empresa: '' }))
     for (const f of copia) {
-      const objetivos = [...empresasLista].sort((a, b) => (conteo.get(a) ?? 0) - (conteo.get(b) ?? 0))
-      const objetivo = objetivos.find((e) => (conteo.get(e) ?? 0) < MAX_INTEGRANTES) ?? objetivos[0]
+      const objetivo = empresasLista.find((e) => (conteo.get(e) ?? 0) < GERENTES_POR_EMPRESA)
+      if (!objetivo) break
       f.empresa = objetivo
       conteo.set(objetivo, (conteo.get(objetivo) ?? 0) + 1)
     }
     setAlumnos(copia)
-    toast({ title: '🔀 Alumnos repartidos', description: `Balanceado entre ${empresasLista.length} empresa(s), máximo ${MAX_INTEGRANTES} por empresa.` })
+    toast({ title: '👑 Gerentes asignados', description: `1 gerente por empresa: ${empresasLista.length} empresa(s), ${alumnos.length} jugador(es).` })
   }
 
   async function crear() {
@@ -719,17 +699,17 @@ function DialogoNuevaSimulacion({
     const vacia = payload.find((p) => p.integrantes.length === 0)
     if (vacia) {
       toast({
-        title: 'Hay una empresa sin integrantes',
-        description: `«${vacia.nombre}» no tiene alumnos. Reparte los estudiantes o reduce el nº de empresas.`,
+        title: 'Hay una empresa sin gerente',
+        description: `«${vacia.nombre}» no tiene su GERENTE. Asigna 1 alumno a cada empresa o reduce el nº de empresas.`,
         variant: 'destructive',
       })
       return
     }
-    const excedida = payload.find((p) => p.integrantes.length > MAX_INTEGRANTES)
+    const excedida = payload.find((p) => p.integrantes.length > GERENTES_POR_EMPRESA)
     if (excedida) {
       toast({
-        title: `Máximo ${MAX_INTEGRANTES} integrantes por empresa`,
-        description: `«${excedida.nombre}» tiene ${excedida.integrantes.length}. Reparte de nuevo, aumenta el nº de empresas o quita alumnos.`,
+        title: 'Un solo GERENTE por empresa',
+        description: `«${excedida.nombre}» tiene ${excedida.integrantes.length} integrantes: cada empresa la juega UN solo jugador (el GERENTE).`,
         variant: 'destructive',
       })
       return
@@ -739,7 +719,7 @@ function DialogoNuevaSimulacion({
       const r = await api.crearIndustria(nombre.trim(), Math.max(1, Math.min(20, Number(periodos) || 8)), payload)
       toast({
         title: '🏭 ¡Simulación creada!',
-        description: `"${r.nombre}" lista: ${payload.length} empresa(s), ${alumnos.length} integrante(s) (el primero de cada empresa es el REPRESENTANTE 👑), ${r.anioMaximo} periodo(s).`,
+        description: `"${r.nombre}" lista: ${payload.length} empresa(s) con su GERENTE 👑 (${alumnos.length} jugador(es)), ${r.anioMaximo} periodo(s).`,
       })
       onOpenChange(false)
       setNombre('')
@@ -761,8 +741,8 @@ function DialogoNuevaSimulacion({
           <Factory className="h-4 w-4 text-pink-300" aria-hidden="true" /> Nueva simulación
         </DialogTitle>
         <DialogDescription className="text-zinc-400">
-          2 a 10 empresas compiten. Cada empresa la juega un grupo de <b>1 a 8 integrantes</b> (alumnos) con un
-          <b> REPRESENTANTE</b> que toma las decisiones, y arranca con 2 marcas.
+          2 a 10 empresas compiten. Cada empresa la juega <b>UN solo alumno: el GERENTE 👑</b> (un jugador, decide las
+          5 áreas), y arranca con 2 marcas.
         </DialogDescription>
       </DialogHeader>
 
@@ -866,13 +846,13 @@ function DialogoNuevaSimulacion({
                 value={manualTexto}
                 onChange={(e) => setManualTexto(e.target.value)}
                 rows={5}
-                placeholder={'Un alumno por línea:\nMaría Quispe\nJuan Pérez\n(junto al nombre, opcional: usuario,Nombre)'}
+                placeholder={'Un alumno por línea (1 gerente por empresa):\nMaría Quispe\nJuan Pérez\n(junto al nombre, opcional: usuario,Nombre)'}
                 className="border-white/10 bg-black/30 text-sm text-zinc-100 placeholder:text-zinc-600"
               />
               <p className="mt-1 text-[10px] text-zinc-500">
                 El usuario de acceso se genera del nombre (sin espacios ni tildes) y la clave inicial es <b>321</b>.
-                El <b>primer integrante de cada empresa será el REPRESENTANTE 👑</b> (podrás cambiarlo después desde la
-                tabla de empresas); el máximo por empresa es <b>{MAX_INTEGRANTES}</b>.
+                Cada empresa la juega <b>UN solo GERENTE 👑</b> (1 alumno por empresa, decide todas las áreas); necesita
+                <b> 1 estudiante por empresa</b>.
               </p>
             </>
           ) : (
@@ -1002,7 +982,6 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
   const [procesandoId, setProcesandoId] = useState<string | null>(null)
   const [aprobandoId, setAprobandoId] = useState<string | null>(null)
   const [eliminandoId, setEliminandoId] = useState<string | null>(null)
-  const [designandoEquipoId, setDesignandoEquipoId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -1085,23 +1064,6 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
     }
   }
 
-  /** 👑 Designa (o cambia) al REPRESENTANTE de una empresa. */
-  async function definirRepresentante(equipoId: string, usuarioId: string) {
-    setDesignandoEquipoId(equipoId)
-    try {
-      const r = await api.definirRepresentante(equipoId, usuarioId)
-      toast({
-        title: '👑 Nuevo representante designado',
-        description: `${r.representante} será el único integrante que tome y envíe las decisiones del grupo.`,
-      })
-      await refresh()
-    } catch (e) {
-      toast({ title: 'No se pudo designar', description: msg(e), variant: 'destructive' })
-    } finally {
-      setDesignandoEquipoId(null)
-    }
-  }
-
   if (cargando) return <SplashCarga />
 
   if (error) {
@@ -1149,7 +1111,7 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
             <div>
               <h2 className="text-xl font-black text-zinc-100 sm:text-2xl">🎮 Tus simulaciones</h2>
               <p className="mt-0.5 text-sm text-zinc-400">
-                Crea industrias con grupos de hasta 8 integrantes (el REPRESENTANTE decide), revisa las decisiones, da el visto bueno, corre cada año o elimina la simulación.
+                Crea industrias con 2 a 10 empresas (un GERENTE 👑 por empresa), revisa las decisiones, da el visto bueno, corre cada año o elimina la simulación.
               </p>
             </div>
             <Dialog open={abrirNueva} onOpenChange={setAbrirNueva}>
@@ -1166,7 +1128,7 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
             <div className="pacha-panel flex min-h-[240px] flex-col items-center justify-center gap-3 p-8 text-center">
               <p className="text-5xl" aria-hidden="true">🍦</p>
               <p className="max-w-sm text-sm text-zinc-400">
-                Aún no tienes simulaciones. Crea la primera industria, importa tus alumnos por CSV y forma los comités.
+                Aún no tienes simulaciones. Crea la primera industria, importa a los GERENTES (1 alumno por empresa) y empieza a jugar.
               </p>
             </div>
           ) : (
@@ -1178,11 +1140,9 @@ export function ProfesorPanel({ usuario, onLogout }: { usuario: UsuarioSesion; o
                   procesando={procesandoId === ind.id}
                   aprobandoId={aprobandoId}
                   eliminando={eliminandoId === ind.id}
-                  designandoEquipoId={designandoEquipoId}
                   onProcesar={procesar}
                   onAprobar={aprobar}
                   onEliminar={eliminar}
-                  onDefinirRepresentante={definirRepresentante}
                 />
               ))}
             </div>

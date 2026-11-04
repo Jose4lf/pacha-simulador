@@ -1,7 +1,7 @@
 // ============================================================
 // PACHA Simulador · Servicio de simulación (BOLIVIA)
-// El "corazón" del sistema: empresas con grupos de hasta 8 integrantes,
-// borradores por área decididos SOLO por el REPRESENTANTE del grupo,
+// El "corazón" del sistema: empresas con UN GERENTE cada una (1 jugador),
+// borradores por área decididos SOLO por el GERENTE de la empresa (1 jugador),
 // visto bueno del docente y procesamiento del periodo con el entorno
 // nacional: eventos de Bolivia e inflación (doc §10, §15, §18).
 // Configuración congelada por industria, compatible con simulaciones ya creadas.
@@ -29,8 +29,8 @@ import {
 } from './tipos'
 
 const CLAVE_DEMO = '321'
-/** Máximo de integrantes (alumnos) por empresa. */
-export const MAX_INTEGRANTES = 8
+/** Cada empresa la juega UN solo jugador: el GERENTE. */
+export const GERENTES_POR_EMPRESA = 1
 
 interface PlantillaMarca {
   tipo: 'agua' | 'crema'
@@ -69,8 +69,8 @@ export interface CrearIndustriaOpts {
  * Crea una industria nueva:
  * · 2 a 10 empresas que compiten (por defecto, las 5 bolivianas: Delizia,
  *   PIL Andina, Frigo, Panda y Cabrera), cada una con 2 marcas (agua + crema)
- * · hasta 8 integrantes (alumnos) por empresa; el primero es el REPRESENTANTE,
- *   único integrante que toma las decisiones del grupo
+ * · UN solo GERENTE por empresa (1 jugador = 1 alumno, que toma todas
+ *   las decisiones del grupo)
  * · nº de periodos configurable por el docente (doc: Años 1 a 10)
  * · configuración de Bolivia congelada (configJson) y semilla de eventos
  * · historia del mercado: reportes de los 3 años anteriores al Año 1 (Años -2, -1 y 0)
@@ -81,8 +81,10 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
   if (empresas.length < 2) throw new PachaError('Se necesitan al menos 2 empresas que compitan')
   if (empresas.length > 10) throw new PachaError('El máximo son 10 empresas')
   for (const e of empresas) {
-    if ((e.integrantes?.length ?? 0) > MAX_INTEGRANTES) {
-      throw new PachaError(`«${e.nombre}» tiene ${e.integrantes.length} integrantes: el máximo por empresa es ${MAX_INTEGRANTES}`)
+    if ((e.integrantes?.length ?? 0) !== GERENTES_POR_EMPRESA) {
+      throw new PachaError(
+        `«${e.nombre}» debe tener exactamente ${GERENTES_POR_EMPRESA} integrante: el GERENTE (un solo jugador por empresa, no más)`
+      )
     }
   }
 
@@ -138,8 +140,7 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
       })
     }
 
-    // Integrantes del grupo: SIN cargos individuales. Todos consultan todos los
-    // reportes y datos; solo el REPRESENTANTE (el primero de la lista) decide.
+    // UN GERENTE por empresa: el único jugador, decide las 5 áreas y envía.
     for (let j = 0; j < emp.integrantes.length; j++) {
       const integ = emp.integrantes[j]
       const usuarioNombre = slugUsuario(integ.usuario || integ.nombre || '')
@@ -147,14 +148,14 @@ export async function crearIndustria(nombre: string, profesorId: string, opts: C
       const usuario = await obtenerOCrearAlumno(usuarioNombre)
       const ocupado = await db.membresia.findFirst({ where: { usuarioId: usuario.id }, include: { equipo: true } })
       if (ocupado) {
-        throw new PachaError(`${usuario.nombre} ya pertenece a la empresa «${ocupado.equipo.nombre}»`)
+        throw new PachaError(`${usuario.nombre} ya es el GERENTE de la empresa «${ocupado.equipo.nombre}»`)
       }
       await db.membresia.create({
         data: {
           equipoId: equipo.id,
           usuarioId: usuario.id,
-          cargo: j === 0 ? 'representante' : 'colaborador',
-          representante: j === 0,
+          cargo: 'gerente',
+          representante: true,
           puntos: DESEMPENO.puntosIniciales,
         },
       })
@@ -1093,28 +1094,28 @@ function contextoEquipo(equipoId: string) {
 }
 
 /**
- * ¿Es este usuario el REPRESENTANTE del grupo (el único que toma decisiones)?
+ * ¿Es este usuario el GERENTE de la empresa (el único que toma decisiones)?
  */
 export async function esRepresentante(equipoId: string, usuarioId: string): Promise<boolean> {
   const membresia = await db.membresia.findUnique({ where: { equipoId_usuarioId: { equipoId, usuarioId } } })
-  if (!membresia) throw new PachaError('No eres integrante de esta empresa', 403)
+  if (!membresia) throw new PachaError('No eres el GERENTE de ninguna empresa', 403)
   return membresia.representante
 }
 
-/** Exige que el usuario sea el REPRESENTANTE del grupo para tomar decisiones. */
+/** Exige que el usuario sea el GERENTE de la empresa para tomar decisiones. */
 async function requireRepresentante(equipoId: string, usuarioId: string) {
   const ok = await esRepresentante(equipoId, usuarioId)
   if (!ok) {
     throw new PachaError(
-      'Solo el REPRESENTANTE del grupo puede tomar y enviar las decisiones (todos los integrantes pueden consultar los reportes y datos)',
+      'Solo el GERENTE de la empresa puede tomar y enviar las decisiones (un solo jugador por empresa)',
       403
     )
   }
 }
 
 /**
- * El docente designa (o cambia) al REPRESENTANTE de una empresa.
- * El representante es el único integrante que toma y envía las decisiones.
+ * El docente designa (o cambia) al GERENTE de una empresa.
+ * El gerente es el único jugador que toma y envía las decisiones.
  */
 export async function definirRepresentante(equipoId: string, nuevoRepresentanteId: string) {
   const equipo = await db.equipo.findUnique({ where: { id: equipoId }, include: { industria: true } })
@@ -1135,7 +1136,7 @@ export async function definirRepresentante(equipoId: string, nuevoRepresentanteI
 }
 
 /** Guarda y ENVÍA el borrador de una área de la decisión (queda visible para todo el equipo).
- *  Nuevo modelo: SOLO el REPRESENTANTE del grupo toma decisiones; todos los
+ *  Nuevo modelo: SOLO el GERENTE (1 jugador por empresa) toma decisiones;
  *  integrantes pueden consultarlas. */
 export async function guardarBorradorArea(
   equipoId: string,
@@ -1183,13 +1184,13 @@ export async function enviarDecision(equipoId: string, usuarioId: string) {
   if (!equipo) throw new PachaError('Equipo no encontrado', 404)
   if (equipo.industria.estado !== 'ACTIVA') throw new PachaError('La simulación finalizó')
 
-  // Membresía del remitente: SOLO el representante envía la decisión
+  // Membresía del remitente: SOLO el GERENTE envía la decisión
   const membresia = await db.membresia.findUnique({
     where: { equipoId_usuarioId: { equipoId, usuarioId } },
   })
-  if (!membresia) throw new PachaError('No eres integrante de esta empresa', 403)
+  if (!membresia) throw new PachaError('No eres el GERENTE de ninguna empresa', 403)
   if (!membresia.representante) {
-    throw new PachaError('Solo el REPRESENTANTE del grupo puede enviar la decisión del año al docente', 403)
+    throw new PachaError('Solo el GERENTE de la empresa puede enviar la decisión del año al docente', 403)
   }
 
   const anio = equipo.industria.anioActual

@@ -176,9 +176,9 @@ function Chip({ children, color = 'pink' }: { children: React.ReactNode; color?:
 
 function CapBienvenida() {
   const pasos = [
-    { n: 1, t: 'El grupo debate y el representante decide', d: 'Todos los integrantes analizan las 5 áreas (precios, publicidad, producción, distribución o I+D); el REPRESENTANTE guarda los borradores.' },
-    { n: 2, t: 'El grupo revisa', d: 'Todos ven los borradores en la pestaña Grupo. Si un área no se trabajó, se verá “sin trabajar” con valores predeterminados.' },
-    { n: 3, t: 'Envío al docente', d: 'El REPRESENTANTE envía la decisión del año. El docente la revisa y da el visto bueno.' },
+    { n: 1, t: 'El GERENTE decide', d: 'Cada empresa la juega UN solo jugador: el GERENTE 👑 analiza y decide las 5 áreas (precios, publicidad, producción, distribución o I+D) y guarda los borradores.' },
+    { n: 2, t: 'El gerente revisa', d: 'Todo queda en la pestaña Gerencia/Grupo. Si un área no se trabajó, se verá “sin trabajar” con valores predeterminados.' },
+    { n: 3, t: 'Envío al docente', d: 'El GERENTE envía la decisión del año. El docente la revisa y da el visto bueno.' },
     { n: 4, t: 'El profesor corre el año', d: 'El motor simula el mercado y genera los reportes del año. Después, todos analizan y se repite el ciclo.' },
   ]
   return (
@@ -186,10 +186,10 @@ function CapBienvenida() {
       <Titulo>🍦 Bienvenida a PACHA</Titulo>
       <Parrafo>
         <strong className="text-zinc-100">PACHA</strong> es un simulador de marketing estilo videojuego por
-        empresas: forman parte de un <strong className="text-zinc-100">Grupo de Dirección</strong> de hasta 8
-        integrantes que dirige una firma de helados, compitiendo contra otras empresas de tu clase (de 2 a 10
-        por mercado). Cada año toman decisiones de precios, publicidad, producción, fuerza de ventas, estudios
-        de mercado e I+D. Después, el motor simula el mercado y les devuelve los resultados.
+        empresas: cada alumno es el <strong className="text-zinc-100">GERENTE 👑</strong> de su propia firma de
+        helados, compitiendo contra otras empresas de tu clase (de 2 a 10
+        por mercado). Cada año toma decisiones de precios, publicidad, producción, fuerza de ventas, estudios
+        de mercado e I+D. Después, el motor simula el mercado y le devuelve los resultados.
       </Parrafo>
       <Parrafo>
         Cada empresa arranca con <Chip>2 marcas</Chip>. La partida dura la cantidad de periodos que configure el
@@ -216,8 +216,8 @@ function CapBienvenida() {
 
       <Tip>
         Tu profesor te dará usuario y contraseña (las cuentas demo usan la contraseña <strong>321</strong>). Cada
-        integrante entra con su propio usuario: todos ven la misma empresa y pueden analizar todos los números;
-        solo el REPRESENTANTE 👑 envía las decisiones.
+        alumno entra con su propio usuario como <strong>GERENTE 👑</strong> de su empresa: un jugador por empresa,
+        decide y envía todas las decisiones.
       </Tip>
 
       <Subtitulo>Unidades del juego (¡importante!)</Subtitulo>
@@ -244,20 +244,17 @@ function CapBienvenida() {
 function CapComite() {
   return (
     <div>
-      <Titulo>👥 El Grupo de Dirección y el REPRESENTANTE</Titulo>
+      <Titulo>👑 El GERENTE de la empresa</Titulo>
       <Parrafo>
-        Cada empresa la juega un grupo de <strong className="text-zinc-100">1 a 8 integrantes</strong> con un
-        <strong className="text-zinc-100"> REPRESENTANTE 👑</strong>. <strong className="text-zinc-100">Todos
-        los integrantes pueden consultar todo</strong>: reportes, cifras financieras y las decisiones de las 5
-        áreas. Pero solo el REPRESENTANTE edita y envía las decisiones del año; si el grupo prefiere a otra
-        persona, el docente lo cambia desde la tabla de empresas.
+        Cada empresa la juega <strong className="text-zinc-100">UN solo jugador: el GERENTE 👑</strong> (un alumno
+        por empresa, sin grupo). El gerente <strong className="text-zinc-100">ve y decide todo</strong>: reportes,
+        cifras financieras y las decisiones de las 5 áreas; edita y envía la decisión del año.
       </Parrafo>
       <Tabla
         encabezados={['Rol', 'Responsabilidad']}
         filas={[
-          ['👑 REPRESENTANTE', 'Guarda los borradores de las 5 áreas, envía la decisión del año al docente y registra proyectos de I+D.'],
-          ['👤 Integrantes', 'Analizan todos los reportes y datos financieros, revisan las decisiones por área y aconsejan al representante. Pueden ver TODO, pero no editar.'],
-          ['🧑‍🏫 Docente', 'Designa o cambia al REPRESENTANTE en cualquier momento desde la tabla de empresas.'],
+          ['👑 GERENTE', 'Único jugador de la empresa: guarda los borradores de las 5 áreas, envía la decisión del año al docente y registra proyectos de I+D.'],
+          ['🧑‍🏫 Docente', 'Crea la simulación con 1 gerente por empresa, revisa las decisiones y da el visto bueno.'],
         ]}
       />
 
@@ -265,17 +262,17 @@ function CapComite() {
       <Lista
         items={[
           <>
-            En <strong className="text-zinc-100">Decisiones</strong> todos ven las 5 áreas con sus datos: el
-            REPRESENTANTE las edita y el resto del grupo las consulta (modo 👁️ consulta).
+            En <strong className="text-zinc-100">Decisiones</strong> el GERENTE ve las 5 áreas con sus datos y las
+            edita directamente (es el único jugador de la empresa).
           </>,
           <>
-            El botón <Chip color="emerald">Guardar borrador del área</Chip> (REPRESENTANTE) publica esa área en
-            la pestaña <strong className="text-zinc-100">Grupo</strong>, donde el equipo revisa lo decidido por
+            El botón <Chip color="emerald">Guardar borrador del área</Chip> (GERENTE) publica esa área en
+            la pestaña <strong className="text-zinc-100">Grupo</strong>, donde se revisa lo decidido por
             área en números (precios, presupuestos, producción, vendedores, estudios).
           </>,
           <>
             Las pestañas de <strong className="text-zinc-100">Estudios</strong> e <strong>I+D</strong> son de
-            consulta para todos; el REPRESENTANTE registra proyectos y, cuando uno se aprueba, puede lanzar la
+            consulta; el GERENTE registra proyectos y, cuando uno se aprueba, puede lanzar la
             marca nueva desde el área de Investigación y Desarrollo.
           </>,
           <>
@@ -283,7 +280,7 @@ function CapComite() {
             <Chip color="pink">sin trabajar</Chip> con los valores predeterminados (los vigentes de tus marcas).
           </>,
           <>
-            Después de revisar los borradores con el grupo, el REPRESENTANTE pulsa{' '}
+            Después de revisar los borradores, el GERENTE pulsa{' '}
             <Chip color="emerald">Enviar decisión del año</Chip>: eso consolida todo y se la manda al docente.
           </>,
           <>
@@ -416,7 +413,7 @@ function CapDecisiones() {
             (visible para todos). Puede actualizarse cuantas veces quieran antes del envío final.
           </>,
           <>
-            <strong className="text-zinc-100">Enviar decisión del año</strong>: el REPRESENTANTE consolida los 5
+            <strong className="text-zinc-100">Enviar decisión del año</strong>: el GERENTE consolida los 5
             borradores y la manda al docente (estado <Chip color="emerald">enviada</Chip>). Ya no se puede
             cambiar hasta el próximo año.
           </>,

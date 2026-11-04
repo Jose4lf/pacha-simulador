@@ -133,21 +133,21 @@ function FaseDocente() {
       <Rol emoji="🎓">Docente</Rol>
       <Titulo>Fase 1 · Crear la simulación</Titulo>
       <Parrafo>
-        El docente arma el mercado: cuántos años dura la partida y qué empresas (comités de alumnos)
+        El docente arma el mercado: cuántos años dura la partida y qué empresas (cada una con su GERENTE 👑)
         compiten en la industria de helados de Bolivia.
       </Parrafo>
       <ol className="mb-4 space-y-3">
         <Paso n={1}>
           Entra con tu cuenta de docente y pulsa <b className="text-zinc-100">Nueva simulación</b>. Elige
           nombre (ejemplo: «Práctica Mercado A»), la cantidad de años (1 a 10) y las empresas: cada una con
-          su nombre y la lista de usuarios de sus integrantes (de 1 a 8 integrantes por empresa; el
-          <b> REPRESENTANTE</b> —el primero de la lista— será quien tome las decisiones).
+          su nombre y <b>UN solo GERENTE 👑</b> (un jugador por empresa, sin grupo: ese alumno tomará todas
+          las decisiones).
         </Paso>
         <Paso n={2}>
           Al guardar, el sistema crea a los <b>alumnos automáticamente</b> (clave inicial <b>321</b>) y a
           cada empresa le da 2 marcas iniciales (una de agua y una de crema) con capacidad de 1.000.000 de
-          litros. El primer integrante de cada empresa queda como <b>REPRESENTANTE 👑</b>: puedes cambiarlo
-          cuando quieras desde la tabla de empresas (lista «👑 Cambiar representante»).
+          litros. El alumno asignado queda como <b>GERENTE 👑</b> de su empresa: es el único jugador que
+          decide y envía.
         </Paso>
         <Paso n={3}>
           Pasa la lista: cada alumno necesita su <b>usuario</b> (la clave es 321 hasta que el Rectorado o el
@@ -158,8 +158,8 @@ function FaseDocente() {
         </Paso>
       </ol>
       <Alerta>
-        Un mismo usuario no puede pertenecer a dos empresas a la vez. Si un alumno se retira, el Rectorado
-        puede eliminarlo y el docente designa a otro REPRESENTANTE desde la tabla de empresas.
+        Un mismo usuario no puede ser GERENTE de dos empresas a la vez. Si un alumno se retira, el Rectorado
+        puede eliminarlo y el docente asigna a otro gerente en una nueva simulación.
       </Alerta>
     </>
   )
@@ -202,35 +202,33 @@ function FaseEventos() {
 function FaseAlumnos() {
   return (
     <>
-      <Rol emoji="🧑‍🎓">Alumnos · Grupo de Dirección</Rol>
-      <Titulo>Fase 3 · Primer ingreso y roles del grupo</Titulo>
+      <Rol emoji="🧑‍🎓">Alumnos · Gerente de la empresa</Rol>
+      <Titulo>Fase 3 · Primer ingreso y el GERENTE único</Titulo>
       <Parrafo>
-        Todos los integrantes del grupo <b>ven y analizan todo</b>: reportes, cifras financieras y las
-        decisiones de las 5 áreas. Solo <b>UNO</b> — el <b className="text-amber-300">REPRESENTANTE 👑</b> —
-        edita y envía las decisiones del año (el docente puede cambiar quién es el representante en
-        cualquier momento).
+        Cada empresa la juega <b>UN solo jugador: el GERENTE 👑</b>. Ve <b>todo</b>: reportes, cifras
+        financieras y las decisiones de las 5 áreas, y es el único que edita y envía la decisión del año.
       </Parrafo>
       <ol className="mb-4 space-y-3">
         <Paso n={1}>
           El alumno entra al login con su usuario (ejemplo: <b>colibri</b>) y la clave <b>321</b>. Ve su
-          empresa, si es REPRESENTANTE o integrante, y el entorno del año actual
+          empresa, su rol de <b>GERENTE</b> y el entorno del año actual
           (eventos anunciados e inflación). Si aún no fue asignado a ninguna empresa verá su estado
           «Sin designar» y deberá esperar al docente.
         </Paso>
         <Paso n={2}>
-          En <b className="text-zinc-100">Decisiones</b> el grupo debate las 5 áreas: precios por marca,
+          En <b className="text-zinc-100">Decisiones</b> el gerente decide las 5 áreas: precios por marca,
           presupuesto de publicidad, producción e inversión en capacidad, vendedores por canal, y estudios
-          + proyectos de I+D. Todos consultan; solo el REPRESENTANTE guarda los borradores y envía la
+          + proyectos de I+D. Guarda los borradores y envía la
           decisión. Los números de cada área están en «Reportes → Reportes por área».
         </Paso>
         <Paso n={3}>
-          En <b className="text-zinc-100">Reportes</b> todo el grupo analiza los resultados: resumen del
+          En <b className="text-zinc-100">Reportes</b> el gerente analiza los resultados: resumen del
           año, detalle mensual, ventas por departamento, resultados financieros (IVA, IT, IUE) e inflación.
-          Con el botón <b>«⬇️ Descargar reporte (Excel/CSV)»</b> obtienen el reporte con cifras completas y
-          nombres completos para el análisis contable del grupo.
+          Con el botón <b>«⬇️ Descargar reporte (Excel/CSV)»</b> obtiene el reporte con cifras completas y
+          nombres completos para el análisis contable.
         </Paso>
         <Paso n={4}>
-          El REPRESENTANTE registra proyectos de I+D (nombre, atributos objetivo 1-10, presupuesto
+          El GERENTE registra proyectos de I+D (nombre, atributos objetivo 1-10, presupuesto
           100-1000 miles Bs) y, cuando un proyecto se aprueba, puede lanzar la marca nueva desde el área de
           Investigación y Desarrollo.
         </Paso>
@@ -255,18 +253,18 @@ function FaseRonda() {
           anunciado.
         </Paso>
         <Paso n={2}>
-          <b className="text-zinc-100">Alumnos — Borradores por área:</b> el REPRESENTANTE define las
-          decisiones de cada área junto a su grupo (ej.: precio Bs 12-18 por litro, publicidad en miles de
+          <b className="text-zinc-100">Alumnos — Borradores por área:</b> el GERENTE define las
+          decisiones de cada área (ej.: precio Bs 12-18 por litro, publicidad en miles de
           Bs, producción según capacidad, vendedores en tiendas/supermercados/kioscos) y pulsa «Guardar
           borrador del área». El I+D además compra estudios de mercado y registra proyectos.
         </Paso>
         <Paso n={3}>
-          <b className="text-zinc-100">Alumnos — Grupo:</b> la pestaña de grupo muestra las decisiones de
-          cada área <b>en cifras</b> (precio, presupuesto, producción, vendedores). Todo el grupo analiza,
-          discute y ajusta antes del envío final.
+          <b className="text-zinc-100">Alumnos — Grupo:</b> la pestaña de gerencia muestra las decisiones
+          de cada área <b>en cifras</b> (precio, presupuesto, producción, vendedores). El gerente revisa,
+          analiza y ajusta antes del envío final.
         </Paso>
         <Paso n={4}>
-          <b className="text-zinc-100">Alumnos — Enviar decisión:</b> el REPRESENTANTE pulsa «Enviar
+          <b className="text-zinc-100">Alumnos — Enviar decisión:</b> el GERENTE pulsa «Enviar
           decisión al docente». El sistema consolida los 5 borradores; un área sin borrador usa los
           valores vigentes y queda marcada «sin trabajar».
         </Paso>
@@ -277,14 +275,14 @@ function FaseRonda() {
           IUE).
         </Paso>
         <Paso n={6}>
-          <b className="text-zinc-100">Todos — Reportes del año:</b> cada área revisa sus números (ventas,
+          <b className="text-zinc-100">Todos — Reportes del año:</b> el gerente revisa sus números (ventas,
           ingresos, costos, contribución, participación), el detalle mensual y regional, los eventos que
           ocurrieron con su efecto trazado y el ranking acumulado. Luego se repite la ronda para el
           siguiente año.
         </Paso>
       </ol>
       <Tip>
-        Ejemplo real validado: con 2 empresas de 5 integrantes (1 representante por grupo), el Año 1 se
+        Ejemplo real validado: con 8 empresas (1 gerente por empresa), el Año 1 se
         completa en 6 pasos y el motor reporta ventas en litros, contribución en miles de Bs y participación %
         por empresa.
       </Tip>

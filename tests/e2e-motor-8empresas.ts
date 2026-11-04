@@ -1,29 +1,25 @@
 /**
- * PRUEBA E2E «MOTOR 8×8» — PACHA Simulador
- * ========================================
- * Verifica el MOTOR con la configuración pedida:
- *   · 8 EMPRESAS compitiendo (el máximo real del aula es 10)
- *   · 8 NPCs por empresa (64 alumnos = tope MAX_INTEGRANTES)
- *   · MODO UN JUGADOR: solo el REPRESENTANTE (1 jugador por empresa)
- *     toma y envía las decisiones; los otros 7 NPCs solo consultan
- *   · Las decisiones SÍ mueven el ranking y los datos por empresa
+ * PRUEBA E2E «MOTOR 8 EMPRESAS» — PACHA Simulador (1 GERENTE por empresa)
+ * =======================================================================
+ * Verifica el MOTOR con 8 empresas, cada una jugada por UN solo gerente
+ * (el modelo nuevo del proyecto), y que TODOS LOS DATOS ESTÉN UNIDOS:
  *
- * Estrategias por año (diseñadas para demostrar movimiento):
- *   Año 1: 8 estrategias distintas (óptima, agresiva, premium, dormida,
- *          desastrosa y 3 medias) → datos por empresa DIFERENTES
+ *   ✔ la decisión del gerente se aplica a las marcas (precio/publicidad/
+ *     producción quedan en el estado tras ejecutar la ronda)
+ *   ✔ el reporte del año es la SUMA de sus marcas (ventas y contribución)
+ *   ✔ el ranking que ve el profesor es IDÉNTICO al que ve el gerente
+ *   ✔ los datos por empresa son DIFERENTES (el motor emula cada empresa)
+ *   ✔ las decisiones mueven el ranking (contribución acumulada cambia,
+ *     posiciones suben/bajan al cambiar la estrategia)
+ *   ✔ el inventario no vendido fluye al año siguiente
+ *   ✔ los eventos del período que ve el gerente coinciden con los del docente
+ *
+ * Estrategias por año (económicamente correctas, IVA 13% incluido):
+ *   Año 1: 8 estrategias distintas  → datos por empresa diferentes
  *   Año 2: la DESASTROSA pasa a ÓPTIMA y la ÓPTIMA pasa a DORMIDA
- *          → su resultado del año se invierte y el ranking se mueve
  *   Año 3: se restauran las estrategias originales
  *
- * Verificaciones clave (las que fallaban en el bug reportado):
- *   ✓ el ranking existe (8 filas) y está ordenado por contribución
- *   ✓ la contribución acumulada CAMBIA tras cada ronda (el ranking se mueve)
- *   ✓ la posición de la empresa que mejora sube ≥ 2 puestos
- *   ✓ los datos del año NO son idénticos entre las 8 empresas
- *   ✓ una decisión mala hunde la contribución del año; una buena la dispara
- *
- * Uso:  bun tests/e2e-motor-8x8.ts   (servidor dev en :3000)
- * Sale con código 0 si TODO pasa.
+ * Uso:  bun tests/e2e-motor-8empresas.ts   (servidor dev en :3000)
  */
 
 const BASE = process.env.PACHA_URL ?? 'http://localhost:3000'
@@ -78,8 +74,6 @@ const acumuladaPrev = new Map<string, number>() // empresaId → contribución a
 // ESTRATEGIAS — precios Bs/L (IVA 13% incl.), publicidad miles Bs,
 // producción miles L (capacidad instalada 1000k L por empresa).
 // Costos año 1: agua ≈ Bs 14.14/L, crema ≈ Bs 19.24/L.
-//   margen sano: agua ≈ Bs 21–26/L, crema ≈ Bs 32–38/L
-//   (límites reales: precio 1–60, publicidad 0–5000, vendedores 0–100)
 // ════════════════════════════════════════════════════════════════
 interface Estrategia {
   nombre: string
@@ -129,7 +123,7 @@ interface FilaRanking {
 
 async function main() {
   console.log('════════════════════════════════════════════════════════')
-  console.log('  PACHA Simulador · Motor 8×8 · modo UN JUGADOR (REPRESENTANTE)')
+  console.log('  PACHA Simulador · Motor 8 empresas · UN GERENTE por empresa')
   console.log(`  Servidor: ${BASE} · sufijo único: ${SUF}`)
   console.log('════════════════════════════════════════════════════════')
 
@@ -137,24 +131,37 @@ async function main() {
   const tokenAdmin = await login('Admin')
   linea('🛡️', 'Rectorado', 'Sesión iniciada como Admin (clave 321).')
 
-  const docente = `profe8x8${SUF}`
+  const docente = `profe8e${SUF}`
   await pedir('POST', '/api/decano/usuarios', tokenAdmin, { accion: 'crear', nombre: docente, password: CLAVE, rol: 'PROFESOR' })
   const tokenProfe = await login(docente)
   linea('🛡️', 'Rectorado', `Docente creado y con sesión: ${docente}.`)
 
-  // ── Fase 1 · 8 empresas × 8 NPCs, UN JUGADOR (representante) ────
-  const npcs: string[][] = NOMBRES_EMPRESAS.map((e, i) =>
-    Array.from({ length: 8 }, (_, k) => `npc${e.toLowerCase()}${k + 1}${SUF}${i}`.slice(0, 20) + SUF)
-  )
+  // ── Fase 1 · 8 empresas × 1 GERENTE (8 jugadores en total) ──────
+  const gerentes = NOMBRES_EMPRESAS.map((e, i) => `gerente${e.toLowerCase()}${SUF}${i}`)
   const industria = await pedir<{ id: string; anioMaximo: number }>('POST', '/api/profesor/industrias', tokenProfe, {
-    nombre: `Motor 8x8 ${SUF}`,
+    nombre: `Motor 8E ${SUF}`,
     periodos: 10,
     empresas: NOMBRES_EMPRESAS.map((nombre, i) => ({
       nombre,
-      integrantes: npcs[i].map((usuario) => ({ usuario })),
+      integrantes: [{ usuario: gerentes[i] }],
     })),
   })
-  linea('🎓', 'Docente', `Simulación creada (id …${industria.id.slice(-6)}): 8 EMPRESAS × 8 NPCs = 64 alumnos.`)
+  linea('🎓', 'Docente', `Simulación creada (id …${industria.id.slice(-6)}): 8 EMPRESAS × 1 GERENTE = 8 jugadores.`)
+
+  // La regla nueva: UNA empresa NO puede tener 2 integrantes
+  let rechazoDos = ''
+  try {
+    await pedir('POST', '/api/profesor/industrias', tokenProfe, {
+      nombre: `Doble ${SUF}`,
+      periodos: 1,
+      empresas: [
+        { nombre: `DobleA ${SUF}`, integrantes: [{ usuario: `x1${SUF}` }, { usuario: `x2${SUF}` }] },
+        { nombre: `DobleB ${SUF}`, integrantes: [{ usuario: `x3${SUF}` }] },
+      ],
+    })
+  } catch (e) { rechazoDos = (e as Error).message }
+  assert(rechazoDos.includes('GERENTE'), `empresa con 2 integrantes rechazada (mensaje: ${rechazoDos.slice(0, 60)})`)
+  linea('🔒', 'Regla nueva', 'Un solo gerente verificado: una empresa con 2 integrantes fue RECHAZADA por la API.')
 
   let estado = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
   const mia = estado.industrias.find((i) => i.id === industria.id)
@@ -163,9 +170,9 @@ async function main() {
 
   const resumen: ResumenEmpresa[] = []
   for (const eq of mia.equipos) {
-    assert(eq.integrantes.length === 8, `«${eq.nombre}» tiene 8 integrantes (NPCs)`)
+    assert(eq.integrantes.length === 1, `«${eq.nombre}» tiene exactamente 1 integrante (GERENTE)`)
     const reps = eq.integrantes.filter((g: any) => g.representante)
-    assert(reps.length === 1, `«${eq.nombre}» tiene exactamente 1 jugador (REPRESENTANTE)`)
+    assert(reps.length === 1, `«${eq.nombre}»: su único integrante es el GERENTE (representante)`)
     assert(eq.marcas.length === 2, `«${eq.nombre}» arranca con 2 marcas iniciales`)
     resumen.push({
       empresaId: eq.id,
@@ -175,9 +182,9 @@ async function main() {
       contribucion: new Map(),
     })
   }
-  linea('👑', 'Modo un jugador', 'Cada empresa juega con UN jugador (el REPRESENTANTE); los otros 7 NPCs solo consultan.')
+  linea('👑', 'Modo un jugador', 'Cada empresa juega con UN GERENTE: él ve todo, decide las 5 áreas y envía.')
 
-  // Línea base del ranking ANTES de jugar (todo en 0) para poder verificar el movimiento
+  // Línea base del ranking ANTES de jugar (todo en 0)
   const base0 = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
     .then((e) => (e.industrias.find((i) => i.id === industria.id)!.ranking as FilaRanking[]))
   assert(base0.length === 8, 'ranking inicial con 8 empresas (todas en 0)')
@@ -187,17 +194,17 @@ async function main() {
   }
   linea('🏁', 'Ranking', 'Línea base capturada: 8 empresas con contribución acumulada 0 antes del Año 1.')
 
-  // Un NPC normal NO puede decidir (verificación del modo un jugador)
-  const eqPrueba = mia.equipos[0]
-  const npcNormal = eqPrueba.integrantes.find((g: any) => !g.representante)!
-  let rechazo = ''
+  // Un alumno SIN empresa no puede decidir (aislamiento del jugador único)
+  const sinEmpresa = `libre${SUF}`
+  await pedir('POST', '/api/decano/usuarios', tokenAdmin, { accion: 'crear', nombre: sinEmpresa, password: CLAVE, rol: 'ALUMNO' })
+  let rechazoLibre = ''
   try {
-    await pedir('POST', '/api/alumno/decisiones', await login(npcNormal.nombre), {
+    await pedir('POST', '/api/alumno/decisiones', await login(sinEmpresa), {
       accion: 'borrador-area', cargo: 'precios', contenido: { precios: [] },
     })
-  } catch (e) { rechazo = (e as Error).message }
-  assert(rechazo.includes('REPRESENTANTE'), `NPC no-representante rechazado al decidir (mensaje: ${rechazo.slice(0, 70)})`)
-  linea('🔒', 'Modo un jugador', `El NPC ${npcNormal.nombre} NO pudo tomar decisiones → solo consulta.`)
+  } catch (e) { rechazoLibre = (e as Error).message }
+  assert(rechazoLibre !== '', `alumno sin empresa rechazado (mensaje: ${rechazoLibre.slice(0, 60)})`)
+  linea('🔒', 'Modo un jugador', 'Un alumno sin empresa NO puede tomar decisiones en ninguna de las 8.')
 
   // ── Fase 2 · Plan de eventos ────────────────────────────────────
   const plan = await pedir<{ anios: { anio: number; eventos: { categoria: string }[] }[] }>(
@@ -209,22 +216,25 @@ async function main() {
 
   // ── Fase 3 · 3 rondas del motor ─────────────────────────────────
   let ordenCambioConfirmado = false
+  let eventosDocenteAnio1 = 0
 
   for (const anio of [1, 2, 3]) {
     console.log(`\n────────── AÑO ${anio} ──────────`)
 
     // Docente prepara el período
     const escenario = anio === 1 ? 'ESTABLE' : undefined
-    await pedir('POST', '/api/profesor/preparar', tokenProfe, { industriaId: industria.id, escenario })
-    linea('🎓', 'Docente', `Período ${anio} preparado (escenario ${escenario ?? 'sorteado'}).`)
+    const vista = await pedir<any>('POST', '/api/profesor/preparar', tokenProfe, { industriaId: industria.id, escenario })
+    const eventosVista: any[] = vista.eventos ?? vista.eventosPeriodo ?? []
+    if (anio === 1) eventosDocenteAnio1 = eventosVista.length
+    linea('🎓', 'Docente', `Período ${anio} preparado: ${eventosVista.length} evento(s) activo(s), escenario ${escenario ?? 'sorteado'}.`)
 
-    // El ÚNICO jugador de cada empresa decide su estrategia del año
+    // El GERENTE de cada empresa decide su estrategia del año
     for (let i = 0; i < resumen.length; i++) {
       const emp = resumen[i]
       const est = ESTRATEGIAS[PLAN[anio - 1][i]]
-      const vista = await pedir<any>('GET', '/api/alumno/estado', emp.tokenRep)
-      const marcaAgua = vista.marcas.find((m: any) => m.nombre.includes('Agua')) ?? vista.marcas[0]
-      const marcaCrema = vista.marcas.find((m: any) => m.nombre.includes('Crema')) ?? vista.marcas[1]
+      const vistaAl = await pedir<any>('GET', '/api/alumno/estado', emp.tokenRep)
+      const marcaAgua = vistaAl.marcas.find((m: any) => m.nombre.includes('Agua')) ?? vistaAl.marcas[0]
+      const marcaCrema = vistaAl.marcas.find((m: any) => m.nombre.includes('Crema')) ?? vistaAl.marcas[1]
       const ids = [marcaAgua.id, marcaCrema.id]
 
       await pedir('POST', '/api/alumno/decisiones', emp.tokenRep, {
@@ -248,8 +258,8 @@ async function main() {
         contenido: { nuevas: [], estudios: [] },
       })
       const envio = await pedir<{ areasSinTrabajar: string[] }>('POST', '/api/alumno/decisiones', emp.tokenRep, { accion: 'enviar' })
-      assert(envio.areasSinTrabajar.length === 0, `${emp.nombre}: las 5 áreas trabajadas por su único jugador`)
-      linea('🧑‍🎓', emp.nombre, `Decisión enviada por su JUGADOR — estrategia ${est.nombre} (agua Bs ${est.precioAgua}/L, crema Bs ${est.precioCrema}/L).`)
+      assert(envio.areasSinTrabajar.length === 0, `${emp.nombre}: las 5 áreas trabajadas por su GERENTE`)
+      linea('🧑‍🎓', emp.nombre, `Decisión enviada por su GERENTE — estrategia ${est.nombre} (agua Bs ${est.precioAgua}/L, crema Bs ${est.precioCrema}/L).`)
     }
 
     // Docente aprueba las 8 decisiones
@@ -258,34 +268,59 @@ async function main() {
     for (const eq of actual.equipos) {
       assert(eq.decisionEstado === 'ENVIADA', `${eq.nombre}: decisión ENVIADA`)
       const r = await pedir('POST', '/api/profesor/aprobar', tokenProfe, { decisionId: eq.decisionId, aprobada: true })
-      assert((r as any).estado === 'APROBADA', `${eq.nombre}: vista buena concedida`)
+      assert((r as any).estado === 'APROBADA', `${eq.nombre}: visto bueno concedido`)
     }
     linea('🎓', 'Docente', 'Visto bueno otorgado a las 8 empresas.')
 
     // El motor ejecuta la ronda
-    const ronda = await pedir<{ anioProcesado: number; ventasTotales: number; finalizada: boolean; equiposSinVistoBueno: string[] }>(
+    const ronda = await pedir<{ anioProcesado: number; ventasTotales: number; finalizada: boolean }>(
       'POST', '/api/profesor/procesar', tokenProfe, { industriaId: industria.id }
     )
     assert(ronda.anioProcesado === anio, `ronda procesada = año ${anio}`)
     assert(ronda.ventasTotales > 0, `ventas del mercado positivas (${ronda.ventasTotales.toFixed(0)} mil L)`)
     linea('⚙️', 'Motor', `Año ${anio} ejecutado: ${ronda.ventasTotales.toFixed(0)} mil L vendidos por las 8 empresas, π = ${(ronda.inflacion * 100).toFixed(1)}%, ${ronda.eventosAplicados} evento(s).`)
 
-    // Datos POR EMPRESA: cada NPC consulta el reporte del año
+    // ── UNIDAD DE DATOS 1: la decisión del GERENTE quedó aplicada a sus marcas
+    for (let i = 0; i < resumen.length; i++) {
+      const emp = resumen[i]
+      const est = ESTRATEGIAS[PLAN[anio - 1][i]]
+      const vistaAl = await pedir<any>('GET', '/api/alumno/estado', emp.tokenRep)
+      const agua = vistaAl.marcas.find((m: any) => m.nombre.includes('Agua'))
+      const crema = vistaAl.marcas.find((m: any) => m.nombre.includes('Crema'))
+      assert(Math.abs(agua.precio - est.precioAgua) < 0.01, `${emp.nombre}: precio del agua en el estado = decisión (${agua.precio} ≈ ${est.precioAgua})`)
+      assert(Math.abs(crema.precio - est.precioCrema) < 0.01, `${emp.nombre}: precio de la crema en el estado = decisión (${crema.precio} ≈ ${est.precioCrema})`)
+      assert(Math.abs(agua.produccion - est.prodAgua) < 0.01, `${emp.nombre}: producción del agua aplicada (${agua.produccion})`)
+      // Los eventos que ve el GERENTE coinciden con los que preparó el docente (año 1)
+      if (anio === 1) {
+        const evAlumno = Array.isArray(vistaAl.eventos) ? vistaAl.eventos.length : 0
+        assert(evAlumno === eventosDocenteAnio1, `${emp.nombre}: ve los mismos ${evAlumno} evento(s) que preparó el docente`)
+      }
+    }
+    linea('🔗', 'Datos unidos', `Año ${anio}: las decisiones de los 8 gerentes quedaron APLICADAS en sus marcas (precio y producción) y los eventos coinciden docente↔gerente.`)
+
+    // Reportes por empresa
     for (const emp of resumen) {
       const rep = await pedir<any>('GET', `/api/alumno/reportes?anio=${anio}`, emp.tokenRep)
       assert(rep.ventas >= 0 && rep.contribucion !== undefined, `${emp.nombre}: reporte del año ${anio} presente`)
       emp.ventas.set(anio, rep.ventas)
       emp.contribucion.set(anio, rep.contribucion)
-    }
 
-    // ✓ VERIFICACIÓN 1: los datos NO son idénticos entre las 8 empresas
+      // ── UNIDAD DE DATOS 2: el reporte del año es la SUMA de sus marcas
+      const sumaVentas = rep.marcas.reduce((s: number, m: any) => s + m.ventas, 0)
+      const sumaContrib = rep.marcas.reduce((s: number, m: any) => s + m.contribucion, 0)
+      assert(Math.abs(sumaVentas - rep.ventas) < 1, `${emp.nombre}: ventas del reporte (${rep.ventas.toFixed(1)}) = suma de marcas (${sumaVentas.toFixed(1)})`)
+      assert(Math.abs(sumaContrib - rep.contribucion) < 2, `${emp.nombre}: contribución del reporte (${rep.contribucion.toFixed(1)}) = suma de marcas (${sumaContrib.toFixed(1)})`)
+    }
+    linea('🔗', 'Datos unidos', `Año ${anio}: los 8 reportes son la SUMA exacta de sus marcas (ventas y contribución).`)
+
+    // ── VERIFICACIÓN: los datos NO son idénticos entre las 8 empresas
     const ventasSet = new Set(resumen.map((e) => Math.round(e.ventas.get(anio)!)))
     assert(ventasSet.size >= 4, `datos por empresa DIFERENTES: ${ventasSet.size} valores de ventas distintos entre 8 empresas`)
     const contribSet = new Set(resumen.map((e) => Math.round(e.contribucion.get(anio)!)))
     assert(contribSet.size >= 4, `contribuciones por empresa DIFERENTES: ${contribSet.size} valores distintos`)
-    linea('📊', 'Motor', `Datos por empresa verificados: ${ventasSet.size} ventas y ${contribSet.size} contribuciones DISTINTAS (no todas iguales).`)
+    linea('📊', 'Motor', `Datos por empresa verificados: ${ventasSet.size} ventas y ${contribSet.size} contribuciones DISTINTAS (el motor emula cada empresa).`)
 
-    // ✓ VERIFICACIÓN 2: la decisión produce el efecto esperado ese año
+    // ── VERIFICACIÓN: la decisión produce el efecto esperado ese año
     const idxOptima = PLAN[anio - 1].indexOf('optima')
     const idxDesastrosa = PLAN[anio - 1].indexOf('desastrosa')
     const idxDormida = PLAN[anio - 1].indexOf('dormida')
@@ -296,7 +331,6 @@ async function main() {
         assert(v < 1, `${resumen[idxDesastrosa].nombre} (DESASTROSA): sin producción ni ventas (${v.toFixed(1)} mil L)`)
       } else {
         // Años 2-3: puede vender el INVENTARIO heredado de la ronda anterior
-        // (mecánica correcta del motor: producción 0 no borra el stock)
         assert(v < 120, `${resumen[idxDesastrosa].nombre} (DESASTROSA): solo vende inventario heredado (${v.toFixed(1)} < 120 mil L)`)
       }
     }
@@ -307,10 +341,20 @@ async function main() {
     assert(cDormida < cMedia - 500, `DORMIDA (${resumen[idxDormida].nombre}) rinde menos que MEDIA-A: ${cDormida.toFixed(0)} < ${cMedia.toFixed(0)}`)
     linea('🎯', 'Motor', `Decisiones → resultados: ÓPTIMA ${cOptima.toFixed(0)} mil Bs ≫ MEDIA ${cMedia.toFixed(0)} ≫ DORMIDA ${cDormida.toFixed(0)}.`)
 
-    // ✓ VERIFICACIÓN 3: el ranking se mueve tras la ronda
-    const ranking = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
+    // ── UNIDAD DE DATOS 3: ranking del profesor ≡ ranking del gerente
+    const rankingProfe = await pedir<{ industrias: any[] }>('GET', '/api/profesor/estado', tokenProfe)
       .then((e) => (e.industrias.find((i) => i.id === industria.id)!.ranking as FilaRanking[]))
-    assert(ranking.length === 8, `ranking con 8 empresas`)
+    const vistaAl0 = await pedir<any>('GET', '/api/alumno/estado', resumen[0].tokenRep)
+    const rankingAlumno = vistaAl0.ranking as FilaRanking[]
+    assert(rankingAlumno.length === 8, 'el gerente también ve 8 empresas en su ranking')
+    for (let i = 0; i < rankingProfe.length; i++) {
+      assert(rankingAlumno[i].equipoId === rankingProfe[i].equipoId, `ranking unido profesor↔gerente en posición ${i + 1} (${rankingProfe[i].nombre})`)
+      assert(Math.abs(rankingAlumno[i].contribucionAcumulada - rankingProfe[i].contribucionAcumulada) < 0.1, `misma contribución acumulada en ambas vistas (${rankingProfe[i].nombre})`)
+    }
+    linea('🔗', 'Datos unidos', `Año ${anio}: el ranking del PROFESOR y del GERENTE son IDÉNTICOS (mismo orden y cifras).`)
+
+    // ── VERIFICACIÓN: el ranking se mueve tras la ronda
+    const ranking = rankingProfe
     for (let i = 0; i < ranking.length; i++) assert(ranking[i].posicion === i + 1, `posición ${i + 1} correcta (${ranking[i].nombre})`)
     for (let i = 1; i < ranking.length; i++)
       assert(ranking[i - 1].contribucionAcumulada >= ranking[i].contribucionAcumulada, `orden por contribución: ${ranking[i - 1].nombre} ≥ ${ranking[i].nombre}`)
@@ -325,7 +369,7 @@ async function main() {
     assert(cambiaron >= minimoCambio, `el ranking SE MUEVE: ${cambiaron}/8 contribuciones acumuladas cambiaron tras el año ${anio}`)
     linea('🏁', 'Ranking', `Año ${anio}: ${cambiaron}/8 contribuciones acumuladas cambiaron → el ranking SE MUEVE.`)
 
-    // ✓ VERIFICACIÓN 4: la empresa que pasa de DESASTROSA a ÓPTIMA sube puestos
+    // ── VERIFICACIÓN: la empresa que pasa de DESASTROSA a ÓPTIMA sube puestos
     if (anio === 2) {
       const posAntes = rankingPrevio.get(resumen[4].empresaId)!
       const posAhora = ranking.find((f) => f.equipoId === resumen[4].empresaId)!.posicion
@@ -333,15 +377,20 @@ async function main() {
       const c4ahora = resumen[4].contribucion.get(2)!
       const c0antes = resumen[0].contribucion.get(1)!
       const c0ahora = resumen[0].contribucion.get(2)!
-      assert(c4ahora > c4antes + 1000, `${resumen[4].nombre} pasó de DESASTROSA a ÓPTIMA: contribución del año ${c4antes.toFixed(0)} → ${c4ahora.toFixed(0)} (+1000)`)
-      assert(c0ahora < c0antes - 1000, `${resumen[0].nombre} pasó de ÓPTIMA a DORMIDA: contribución del año ${c0antes.toFixed(0)} → ${c0ahora.toFixed(0)} (−1000)`)
+      assert(c4ahora > c4antes + 1000, `${resumen[4].nombre} pasó de DESASTROSA a ÓPTIMA: contribución del año ${c4antes.toFixed(0)} → ${c4ahora.toFixed(0)}`)
+      assert(c0ahora < c0antes - 1000, `${resumen[0].nombre} pasó de ÓPTIMA a DORMIDA: contribución del año ${c0antes.toFixed(0)} → ${c0ahora.toFixed(0)}`)
       assert(posAhora <= posAntes - 2, `${resumen[4].nombre} SUBE en el ranking: posición ${posAntes} → ${posAhora} (≥ 2 puestos)`)
       linea('📈', 'Ranking', `${resumen[4].nombre} mejoró sus decisiones y SUBIÓ del puesto ${posAntes} al ${posAhora}; ${resumen[0].nombre} empeoró y su resultado del año se hundió.`)
+
+      // ── UNIDAD DE DATOS 4: el inventario no vendido fluye al año siguiente
+      // Tunari (ÓPTIMA año 2) produce 810k L pero vende menos → el sobrante
+      // queda en sus marcas y su DESASTROSA del año 3 lo liquidará
+      const vistaInv = await pedir<any>('GET', '/api/alumno/estado', resumen[4].tokenRep)
+      const invTotal = vistaInv.marcas.reduce((s: number, m: any) => s + (m.inventario ?? 0), 0)
+      assert(invTotal > 0, `${resumen[4].nombre} (DESASTROSA→ÓPTIMA): su inventario no vendido del año 2 (${invTotal.toFixed(1)} mil L) sigue en sus marcas`)
+      linea('📦', 'Datos unidos', `El inventario fluye: ${resumen[4].nombre} arrastró ${invTotal.toFixed(1)} mil L del año 2 al año 3.`)
     }
     if (anio === 3) {
-      // Con estrategias restauradas, la ex-desastrosa vuelve a aportar mucho menos
-      // (puede liquidar inventario heredado, pero sin producción ni publicidad su
-      // contribución del año queda muy por debajo de la ÓPTIMA)
       const c4 = resumen[4].contribucion.get(3)!
       const c0 = resumen[0].contribucion.get(3)!
       assert(c4 < c0 - 2000, `${resumen[4].nombre} volvió a DESASTROSA: contribución del año ${c4.toFixed(0)} ≪ ÓPTIMA ${c0.toFixed(0)}`)
@@ -361,24 +410,23 @@ async function main() {
     }
   }
 
-  // ✓ VERIFICACIÓN 5: las posiciones del ranking cambiaron en algún momento
+  // ── VERIFICACIÓN final: las posiciones cambiaron en algún momento
   assert(ordenCambioConfirmado, 'las POSICIONES del ranking cambiaron entre rondas (no quedó congelado)')
   linea('✅', 'Ranking', 'Las posiciones del ranking cambiaron entre años — el ranking refleja las decisiones.')
-
-  // El alumno también ve el ranking en su vista
-  const vistaAlumno = await pedir<any>('GET', '/api/alumno/estado', resumen[0].tokenRep)
-  assert(Array.isArray(vistaAlumno.ranking) && vistaAlumno.ranking.length === 8, 'el jugador ve el ranking de 8 empresas en su estado')
-  linea('👀', 'Alumno', `El jugador ve el ranking en su panel: ${vistaAlumno.ranking.length} empresas, líder «${vistaAlumno.ranking[0].nombre}».`)
 
   // ── Fase 4 · Limpieza ───────────────────────────────────────────
   const eliminacion = await pedir<{ ok: boolean; equiposEliminados: number }>('DELETE', `/api/profesor/industrias?id=${industria.id}`, tokenProfe)
   assert(eliminacion.ok && eliminacion.equiposEliminados === 8, 'simulación eliminada con sus 8 empresas')
-  linea('🗑️', 'Docente', 'Simulación de prueba eliminada (8 empresas, 64 membresías, marcas y reportes).')
+  linea('🗑️', 'Docente', 'Simulación de prueba eliminada (8 empresas, marcas, decisiones y reportes).')
+
+  const estadoSinDesignar = await pedir<any>('GET', '/api/alumno/estado', resumen[0].tokenRep)
+  assert(estadoSinDesignar.designado === false, 'el gerente queda SIN DESIGNAR tras eliminar la simulación')
+  linea('🪑', 'Gerentes', 'Estado «Sin designar» verificado para los gerentes de la partida de prueba.')
 
   console.log('\n════════════════════════════════════════════════════════')
   if (fallos === 0) {
-    console.log('  ✅ MOTOR 8×8 VALIDADO — 8 empresas, 8 NPCs, un jugador por')
-    console.log('     empresa; las decisiones MUEVEN el ranking y los datos.')
+    console.log('  ✅ MOTOR 8 EMPRESAS VALIDADO — 1 GERENTE por empresa; los datos')
+    console.log('     están UNIDOS: decisión → marcas → reportes → ranking.')
   } else {
     console.log(`  ❌ ${fallos} verificación(es) fallaron`)
   }

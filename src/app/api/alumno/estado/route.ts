@@ -2,7 +2,7 @@ import { db } from '@/lib/db'
 import { error, ok } from '@/lib/pacha/api-helpers'
 import { requireRol } from '@/lib/pacha/auth'
 import { parseDecision, parseJson } from '@/lib/pacha/tipos'
-import { rankingIndustria } from '@/lib/pacha/simulacion'
+import { rankingIndustria, GERENTES_POR_EMPRESA } from '@/lib/pacha/simulacion'
 import { CARGOS, ESTUDIOS, ID_CONFIG, presupuestoNormal, probabilidadExito } from '@/lib/pacha/catalogo'
 
 /** Estado completo de juego del alumno (HUD + decisión + reportes + datos de todas las pestañas). */
@@ -58,7 +58,7 @@ export async function GET() {
     return ok({
       usuario,
       designado: true,
-      membresia: { esRepresentante: membresia.representante },
+      membresia: { esRepresentante: membresia.representante, esGerente: membresia.representante },
       equipo: { id: equipo.id, nombre: equipo.nombre, color: equipo.color },
       industria: {
         id: equipo.industria.id,
@@ -132,7 +132,7 @@ export async function GET() {
       })),
       costoEstudiosAnio,
       ranking,
-      config: { id: ID_CONFIG, catalogoEstudios: ESTUDIOS, maxIntegrantes: 8 },
+      config: { id: ID_CONFIG, catalogoEstudios: ESTUDIOS, maxIntegrantes: GERENTES_POR_EMPRESA },
       // Eventos de la simulación por año, con sus propiedades (doc §15)
       eventos: eventosPeriodo.map((e) => ({
         anio: e.anio,

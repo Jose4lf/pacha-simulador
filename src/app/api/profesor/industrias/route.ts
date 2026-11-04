@@ -4,9 +4,8 @@ import { crearIndustria, eliminarIndustria, type EmpresaEntrada } from '@/lib/pa
 import { PachaError } from '@/lib/pacha/tipos'
 
 /**
- * Crea una simulación: 2-10 empresas, cada una con sus integrantes (alumnos,
- * se crean si no existen, máximo 8 por empresa) y el nº de periodos configurado.
- * El primer integrante de cada empresa es el REPRESENTANTE del grupo.
+ * Crea una simulación: 2-10 empresas, cada una con UN solo GERENTE (1 alumno,
+ * se crea si no existe) y el nº de periodos configurado.
  */
 export async function POST(req: Request) {
   try {

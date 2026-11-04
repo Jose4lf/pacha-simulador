@@ -111,7 +111,7 @@ export function AlumnoProyectos({
   refresh: () => Promise<void> | void
 }) {
   const cfg = estado.config.id
-  // Nuevo modelo: solo el REPRESENTANTE del grupo registra proyectos de I+D
+  // Nuevo modelo: solo el GERENTE de la empresa registra proyectos de I+D
   const esRepresentante = estado.membresia?.esRepresentante ?? false
   const [nombre, setNombre] = useState('')
   const [atributos, setAtributos] = useState<number[]>([5, 5, 5, 5, 5, 5])
@@ -182,7 +182,7 @@ export function AlumnoProyectos({
         </div>
       )}
 
-      {/* Formulario de registro (solo el REPRESENTANTE) */}
+      {/* Formulario de registro (solo el GERENTE) */}
       {esRepresentante ? (
       <section
         aria-label="Registrar proyecto"
@@ -316,9 +316,9 @@ export function AlumnoProyectos({
       ) : (
         <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-4 text-center">
           <p className="text-2xl" aria-hidden="true">👁️</p>
-          <p className="mt-1 text-xs font-bold text-amber-200">Modo consulta: solo el REPRESENTANTE del grupo registra proyectos de I+D</p>
+          <p className="mt-1 text-xs font-bold text-amber-200">Modo consulta: solo el GERENTE de la empresa registra proyectos de I+D</p>
           <p className="mt-0.5 text-[11px] text-zinc-400">
-            Los proyectos del equipo se revisan en el <b>Grupo</b>; si uno se aprueba, el representante puede lanzar la marca nueva desde Decisiones → Investigación y Desarrollo.
+            Los proyectos del equipo se revisan en el <b>Grupo</b>; si uno se aprueba, el GERENTE puede lanzar la marca nueva desde Decisiones → Investigación y Desarrollo.
           </p>
         </div>
       )}

@@ -117,7 +117,7 @@ export interface AlumnoEstado {
   usuario: UsuarioSesion
   /** false = SIN DESIGNAR: la cuenta existe pero el docente aún no lo asigna a una empresa. */
   designado: boolean
-  membresia: { esRepresentante: boolean } | null
+  membresia: { esRepresentante: boolean; esGerente: boolean } | null
   equipo: { id: string; nombre: string; color: string }
   industria: { id: string; nombre: string; anioActual: number; anioMaximo: number; estado: string }
   marcas: MarcaEstado[]
@@ -327,7 +327,7 @@ export const api = {
     request<{ ok: boolean; equiposEliminados: number }>(`/api/profesor/industrias?id=${encodeURIComponent(industriaId)}`, {
       method: 'DELETE',
     }),
-  /** 👑 Designa (o cambia) al REPRESENTANTE de una empresa. */
+  /** 👑 Designa (o cambia) al GERENTE de una empresa. */
   definirRepresentante: (equipoId: string, usuarioId: string) =>
     request<{ ok: boolean; representante: string }>('/api/profesor/representante', {
       method: 'POST',
