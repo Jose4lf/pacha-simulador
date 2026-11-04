@@ -390,6 +390,8 @@ export function AlumnoDecisiones({
   }
 
   const [inversionCapacidad, setInversionCapacidad] = useState(0)
+  /** Texto visible del input de inversión: SOLO dígitos (nunca letras ni símbolos). */
+  const [textoInversion, setTextoInversion] = useState('0')
 
   /** Envía el borrador de UNA área con los valores actuales del editor. */
   async function enviarArea(cargoId: string) {
@@ -700,12 +702,21 @@ export function AlumnoDecisiones({
           </p>
           <input
             id="inversion-capacidad"
-            type="number"
-            min={0}
-            max={2000}
-            step={50}
-            value={inversionCapacidad}
-            onChange={(e) => setInversionCapacidad(Math.max(0, Math.min(2000, Number(e.target.value) || 0)))}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="0"
+            value={textoInversion}
+            onFocus={() => {
+              if (textoInversion === '0') setTextoInversion('')
+            }}
+            onBlur={() => setTextoInversion(String(inversionCapacidad))}
+            onChange={(e) => {
+              // Filtra TODO lo que no sea dígito: la letra «d» de la captura ya no puede entrar
+              const soloDigitos = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+              setTextoInversion(soloDigitos)
+              setInversionCapacidad(Math.max(0, Math.min(2000, Number(soloDigitos || '0'))))
+            }}
             className="mt-2 h-9 w-40 rounded-lg border border-white/15 bg-black/30 px-3 text-sm font-bold text-zinc-100"
           />
         </div>
